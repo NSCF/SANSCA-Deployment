@@ -6,7 +6,8 @@ We are in the process of deploying a living atlas instance for South Africa and 
 
 ### Completed 
 * Ubuntu 22.04 LTS Installion
-* Launced la-toolkit and authenicated to server
+* Launched la-toolkit and authenicated to server using ssh-tunnel to server
 
 ### In progress
 * Deploy SANSCA test instance
+* Resolve initial seeding issues
