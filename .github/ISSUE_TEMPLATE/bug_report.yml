@@ -1,0 +1,66 @@
+name: 🐛 Bug report
+description: Create a report to help us improve
+title: "[BUG] "
+labels: ["bug"]
+assignees: []
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: "What happened?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: To Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: "I expected it to..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Add screenshots to help explain your problem.
+      placeholder: "You can drag and drop images here."
+    validations:
+      required: false
+
+  - type: textarea
+    id: desktop
+    attributes:
+      label: Desktop (please complete the following information)
+      description: OS, browser, and version if the bug occurred on a desktop.
+      placeholder: |
+        - OS: [e.g. Windows 10]
+        - Browser: [e.g. Chrome]
+        - Version: [e.g. 123.0]
+    validations:
+      required: false
+
+  - type: textarea
+    id: smartphone
+    attributes:
+      label: Smartphone (please complete the following information)
+      description: Device info if the bug occurred on a smartphone.
+      placeholder: |
+        - Device: [e.g. i]()
