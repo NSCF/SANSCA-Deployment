@@ -1,0 +1,64 @@
+name: ⚙️ Deployment Issue
+description: Log an issue encountered during SANSCA installation or configuration.
+title: "[DEPLOYMENT] "
+labels: ["deployment", "help wanted"]
+assignees: []
+
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: What were you trying to do?
+      description: Brief description of the task (e.g. install IPT, configure nginx, etc.)
+      placeholder: "I was trying to install IPT on Ubuntu 22.04..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What went wrong?
+      description: Describe the issue, including error messages or unexpected behavior.
+      placeholder: "The installation failed with a 'permission denied' error..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: system-info
+    attributes:
+      label: System Info
+      description: Include versions of OS, Docker, Ansible, IPT, etc.
+      placeholder: |
+        - OS & Version:
+        - Docker version:
+        - Ansible version:
+        - IPT version:
+    validations:
+      required: false
+
+  - type: textarea
+    id: troubleshooting
+    attributes:
+      label: Troubleshooting steps taken
+      description: List what you tried to solve the issue.
+      placeholder: "- Restarted the service\n- Checked file permissions"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste error logs or add links/screenshots to help understand the issue.
+      placeholder: "Paste logs or upload screenshots here..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: suggestions
+    attributes:
+      label: Suggestions
+      description: Any ideas for fixing or improving documentation?
+      placeholder: "Maybe this should be added to the install guide..."
+    validations:
+      required: false
