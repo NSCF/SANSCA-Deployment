@@ -1,1 +1,19 @@
 blank_issues_enabled: false
+contact_links: []
+
+issue_templates:
+  - name: 🛠️ Task
+    description: For work items, to-dos, or specific tasks to complete.
+    file: new_task.yml
+
+  - name: 🐛 Bug Report
+    description: Create a report to help us improve.
+    file: bug_report.yml
+
+  - name: 🚀 Feature request
+    description: Suggest an idea or enhancement for this project.
+    file: feature_request.yml
+
+  - name: ⚙️ Deployment Issue
+    description: Log an issue encountered during SANSCA installation or configuration.
+    file: deployment_issue.yml
