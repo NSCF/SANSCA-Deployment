@@ -1,1 +1,1 @@
-Confuguration details
+# Configuration details
