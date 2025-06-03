@@ -15,6 +15,45 @@
 **Short Name of Map Area:** South Africa
 ## Servers
 ## Services
+
+**Minimum Viable Install:**
+* branding
+* cas
+* biocache_backend
+* Solr
+* collectory
+* ala_hub
+* biocache_services
+* ala_bie
+* bie_index
+* nameindexer
+
+**Full Instalation:**
+* Add *lists, regions, logger, images, alerts, biocache_cli, doi, dashboard, sds (sensitive species management), data_quality, spatial*
+
+**Deployment Sequence:**  
+* branding
+* cas
+* biocache_backend
+* solr
+* collectory
+* ala_hub
+* biocache_service
+* ala_bie
+* bie_index
+* lists
+* regions
+* logger
+* nameindexer
+* images
+* alerts
+* biocache_cli
+* doi
+* dashboard
+* sds
+* data_quality
+* spatial
+
 ## Which services on which servers
 ## Server Information
 
