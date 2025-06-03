@@ -4,8 +4,10 @@
 
 **Your LA Portal Long Name:** South African Natural Science Collections Atlas  
 **Short Name:** SANSCA  
-**Use SSL?:** ???  
+**Use SSL?:** Yes  
 **The domain of your LA Portal:** sansca.org.za  
+> **_NOTE:_** DNS A record information will be reuqired to setup sansca.org.za
+
 **Portal branding:** clean  
 
 ## Location information

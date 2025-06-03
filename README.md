@@ -10,7 +10,7 @@ We are in the process of deploying a living atlas instance for South Africa and 
 
 * Ubuntu 22.04 LTS Installion
 * Launched la-toolkit and authenicated to server using ssh-tunnel to server
-* Succesful connectivity test
+* Succesful connectivity test using localhost
 
 ### In progress
 
