@@ -1,3 +1,3 @@
-# All tools developed in relation to the SANSCA platform
+# Overview of Tools Supporting the SANSCA Platform
 
 Scripts, Ansible playbooks, docker files, utilities, etc.
