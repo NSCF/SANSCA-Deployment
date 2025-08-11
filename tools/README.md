@@ -7,7 +7,8 @@
 
 ## Central Repository and Database Tools
 
-- [ ] SQL Metadata Database (Not started)
+- [ ] PostgreSQL Specimen Metadata Database (Not started)
+- [ ] ATOM MySQL Archival Metadata Database (Not started)
 - [ ] Sheet-to-Database Import Tool (Not started)
 
 ## Reporting and Admin Tools
@@ -17,3 +18,6 @@
   - Metadata completion
   - Upload status
 - [ ] Archival Document Tracking Logs (existing sheets upgraded) (Not started)
+  - Archival document imaging
+  - Metadata completion
+  - Upload status
