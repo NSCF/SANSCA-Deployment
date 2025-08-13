@@ -10,6 +10,7 @@
 - [ ] PostgreSQL Specimen Metadata Database (Not started)
 - [ ] ATOM MySQL Archival Metadata Database (Not started)
 - [ ] Sheet-to-Database Import Tool (Not started)
+- [ ] SHA256_checksum_generator.bat
 
 ## Reporting and Admin Tools
 
