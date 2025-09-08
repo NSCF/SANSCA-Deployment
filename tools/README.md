@@ -1,24 +1,34 @@
-# Tools developed or planned for the SANSCA platform
-## Metadata Management Tools
+# Tools and Resources developed or planned for the SANSCA platform
+## Metadata Management Resources
 
-- [X] Metadata Mapping Matrix (Documentation Tool) (Final review)
-- [X] Metadata Spreadsheet Template (Final review)
-- [ ] Metadata Validator Tool
+- [X] Metadata Vocabulary and Mapping Matrix (Final review)
 
-## Central Repository and Database Tools
+## Central Repositories
 
-- [ ] PostgreSQL Specimen Metadata Database (Not started)
+### Data Storage Repositories
+
+- [ ] PostgreSQL Herbaria and Zoological Type Specimen Metadata Database (Not started)
 - [ ] ATOM MySQL Archival Metadata Database (Not started)
+
+### Working repositories
+
+- [X] Herbarium specimen Metadata Working Repository (Final review)
+- [X] Zoological type specimen Metadata Working Repository (Final review)
+- [X] Archival document Metadata Working Repository (Final review)
+- [X] Dataset Metadata Working Repository (Final review)
+
+## Database Tools
+
 - [ ] Sheet-to-Database Import Tool (Not started)
-- [ ] SHA256_checksum_tool.bat (Test and Finalise)
 
-## Reporting and Admin Tools
+## Validation Tools
 
-- [ ] Specimen Tracking Logs (existing sheets upgraded) (Not started)
-  - Specimen imaging
-  - Metadata completion
-  - Upload status
-- [ ] Archival Document Tracking Logs (existing sheets upgraded) (Not started)
-  - Archival document imaging
-  - Metadata completion
-  - Upload status
+- [X] [SHA256_checksum_tool.bat](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_validation/SHA256_checksum_tool.bat), see [Readme](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_validation/SHA256_checksum_tool_readme.md) (Test and Finalise)
+- [ ] Metadata Validator Tool (Delayed)
+
+## Reporting Templates
+
+- [X] Image Set Transfer Form (Final review)
+- [X] Image Set Transport Form (Final review)
+- [X] Transfer and Transport Log (Final review)
+- [ ] Data Integrity Report (In progress)
