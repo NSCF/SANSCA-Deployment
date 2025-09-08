@@ -8,7 +8,7 @@
 ### Data Storage Repositories
 
 - [ ] PostgreSQL Herbaria and Zoological Type Specimen Metadata Database (Not started)
-- [ ] ATOM MySQL Archival Metadata Database (Not started)
+- [ ] AtoM MySQL Archival Metadata Database (Not started)
 
 ### Working repositories
 
@@ -19,13 +19,17 @@
 
 ## Database Tools
 
-- [ ] Sheet-to-Database Import Tool (Not started)
+- [ ] PostgreSQL Sheet-to-Database Import Tool (Not started)
+- [ ] AtoM Sheet-to-Database Import Tool (Not started)
 
 ## Validation Tools
 
 - [X] [SHA256_checksum_tool.bat](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_validation/SHA256_checksum_tool.bat), see [Readme](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_validation/SHA256_checksum_tool_readme.md) (Test and Finalise)
-- [ ] Metadata Validator Tool (Delayed)
-
+- [ ] Herbarium Metadata Validator Tool (Delayed)
+- [ ] Zoological type Metadata Validator Tool (Delayed)
+- [ ] Archival Metadata Validator Tool (Delayed)
+- [ ] Dataset Metadata Validator Tool (Delayed)
+      
 ## Reporting Templates
 
 - [X] Image Set Transfer Form (Final review)
