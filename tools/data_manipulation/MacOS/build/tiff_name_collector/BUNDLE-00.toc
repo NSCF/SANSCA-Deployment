@@ -1,3 +1,0 @@
-([('tiff_name_collector',
-   '/Users/klippies/Projects/Coding/github_repository_clones/SANSCA-Deployment/tools/data_manipulation/dist/tiff_name_collector',
-   'EXECUTABLE')],)
