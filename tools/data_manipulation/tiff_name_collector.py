@@ -40,7 +40,7 @@ for r, dirs, files in os.walk(main_folder):
     for file in files:
         if file.lower().endswith(('.tiff', '.tif')):
             folder_name = os.path.basename(r)
-            full_path = os.path.join(root, file)
+            full_path = os.path.join(r, file)
             rel_path = os.path.relpath(full_path, start=main_folder)  # Relative path
             data.append({
                 'Institution Name': institution_name,
