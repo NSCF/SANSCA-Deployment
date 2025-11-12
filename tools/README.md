@@ -32,8 +32,8 @@
 
 ## Digital Asset Management Tools
 
-- [ ] [Tiff Folder Scanner](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/MacOS) (Test and Finalise)
-- [ ] [Tiff Folder Scanner](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/Windows) (Test and Finalise)
+- [ ] [Tiff Folder Scanner - MacOS](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/MacOS) (Test and Finalise)
+- [ ] [Tiff Folder Scanner - Windows](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/Windows) (Test and Finalise)
 
 ## Reporting Templates
 
