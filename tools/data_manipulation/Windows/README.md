@@ -77,8 +77,6 @@ pyinstaller --onefile --windowed tiff_folder_scanner_windows.py
 dist/tiff_folder_scanner_macos
 ```
 
-Now move it to your Applications folder or share it with others.
-
 ## License
 MIT License © 2025
 
