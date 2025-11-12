@@ -30,9 +30,9 @@
 - [ ] Archival Metadata Validator Tool (Delayed)
 - [ ] Dataset Metadata Validator Tool (Delayed)
 
-## Folder Management Tools
+## Digital Asset Management Tools
 
-- [ ] Tiff Name Collector (In progress)
+- [ ] [Tiff Name Collector](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_manipulation/Windows/tiff_name_collector_windows.py) (Test and Finalise)
 
 ## Reporting Templates
 
