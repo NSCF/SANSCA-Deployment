@@ -1,0 +1,55 @@
+🧾 TIFF Folder Scanner
+This Python tool scans a selected folder (and all its subfolders) for TIFF image files (.tif / .tiff) and generates an Excel spreadsheet listing:
+Institution name
+Folder name
+File name
+Full file path
+Relative file path
+It uses a simple Tkinter GUI for folder selection and pop-up messages.
+
+🚀 Features
+Recursively scans all subfolders for TIFF files
+Automatically includes folder, filename, and path details
+Saves the results to an Excel file named tiff_files_list.xlsx in the selected folder
+User-friendly pop-up dialogs for instructions, errors, and completion messages
+
+🧰 Requirements
+You’ll need Python 3 installed, along with the following dependencies:
+pip install pandas openpyxl
+💡 openpyxl is required for writing .xlsx files.
+
+🧑‍💻 Usage
+Download or clone this repository.
+Run the script in your terminal or IDE:
+python3 tiff_scanner.py
+When prompted, select the main institution folder containing all your collection subfolders.
+The tool will search recursively for .tif and .tiff files.
+Once complete, an Excel file named tiff_files_list.xlsx will be saved in the same main folder.
+
+📁 Folder Structure Example
+Institution_Folder/
+├── Collection_A/
+│   ├── image_001.tif
+│   ├── image_002.tiff
+├── Collection_B/
+│   ├── sample_01.tif
+│   ├── sample_02.tif
+Output Excel Example:
+Institution Name	Folder Name	File Name	Full Path	Relative Path
+Institution_Folder	Collection_A	image_001.tif	/path/to/Collection_A/image_001.tif	Collection_A/image_001.tif
+Institution_Folder	Collection_B	sample_02.tif	/path/to/Collection_B/sample_02.tif	Collection_B/sample_02.tif
+
+🖼️ Screenshots
+You can replace the placeholder images below with your own screenshots:
+Step	Screenshot
+1️⃣ Folder selection dialog	
+2️⃣ Success message	
+3️⃣ Example Excel output	
+📸 Save your screenshots in a folder named screenshots/ inside your repository.
+
+🧩 Notes
+The Excel output can be opened in Excel, LibreOffice Calc, or Google Sheets.
+If you see an error related to permissions or open files, make sure the Excel file isn’t already open.
+Works on Windows, macOS, and Linux (with a GUI environment).
+🪪 License
+MIT License © 2025
