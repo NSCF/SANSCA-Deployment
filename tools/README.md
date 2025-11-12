@@ -32,7 +32,8 @@
 
 ## Digital Asset Management Tools
 
-- [ ] [Tiff Name Collector](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_manipulation/Windows/tiff_name_collector_windows.py) (Test and Finalise)
+- [ ] [Tiff Folder Scanner](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/MacOS) (Test and Finalise)
+- [ ] [Tiff Folder Scanner](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/Windows) (Test and Finalise)
 
 ## Reporting Templates
 
