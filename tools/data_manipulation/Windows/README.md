@@ -1,4 +1,4 @@
-## TIFF Folder Scanner
+# TIFF Folder Scanner
 This Python tool scans a selected folder (and all its subfolders) for TIFF image files (.tif / .tiff) and generates an Excel spreadsheet listing:
 * Institution name
 * Folder name
