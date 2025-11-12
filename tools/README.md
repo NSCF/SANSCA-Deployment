@@ -29,7 +29,11 @@
 - [ ] Zoological type Metadata Validator Tool (Delayed)
 - [ ] Archival Metadata Validator Tool (Delayed)
 - [ ] Dataset Metadata Validator Tool (Delayed)
-      
+
+## Folder Management Tools
+
+- [ ] Tiff Name Collector (In progress)
+
 ## Reporting Templates
 
 - [X] Image Set Transfer Form (Final review)
