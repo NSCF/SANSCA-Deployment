@@ -1,4 +1,4 @@
-## How the SHA256_checksum_tool works
+# How the SHA256_checksum_tool works
 The script relies on Windows’ built-in **certutil** command to calculate SHA-256 hashes. If certutil is not available, the script cannot generate or verify checksums, so the check ensures the required tool is present before proceeding. **certutil** should already be included in your Windows installation.
 
 ## Drag and Drop
