@@ -8,7 +8,7 @@
 ### Data Storage Repositories
 
 - [ ] PostgreSQL Herbaria and Zoological Type Specimen Metadata Database (Not started)
-- [ ] AtoM MySQL Archival Metadata Database (Not started)
+- [ ] AtoM MySQL Archival Metadata Database (In progress)
 
 ### Working repositories
 
