@@ -1,4 +1,4 @@
-# TIFF Folder Scanner
+# Digital Asset Metadata Sheet Generator (DAMSG)
 This Python tool scans a selected folder (and all its subfolders) for TIFF image files (.tif / .tiff) and generates an Excel spreadsheet listing:
 * Institution name
 * Folder name
@@ -46,6 +46,15 @@ Output Excel Example:
 |------------------|-------------|------------|-----------|---------------|
 | Institution_Folder |	Collection_A |	image_001.tif |	/path/to/Collection_A/image_001.tif |	Collection_A/image_001.tif
 | Institution_Folder |	Collection_B |	sample_02.tif |	/path/to/Collection_B/sample_02.tif |	Collection_B/sample_02.tif
+
+## Output Files
+```
+DAMSG_output/
+└── 20260219_154233/
+    ├── image_files_list.xlsx
+    ├── image_files_list.csv
+    └── missing_date_created.txt
+```
 
 ## Screenshots (Update)
 
