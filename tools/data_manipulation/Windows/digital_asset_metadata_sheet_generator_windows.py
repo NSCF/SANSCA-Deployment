@@ -77,7 +77,7 @@ languageVar = StringVar()
 scanModeVar = StringVar()
 
 fileFilters = ["All","TIFF only","RAW only","JPEG only"]
-outputChoices = ["Both","Excel only","CSV only"]
+outputChoices = ["CSV only","Excel only","Both"]
 languages = ["English","Afrikaans","Latin/Greek"]
 scanModes = ["Single Collection","All Collections (selected institution)","All Institutions + Collections"]
 
@@ -239,7 +239,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "license":meta["license"],
                     "dateCreated":getDateCreated(full),
                     "format":fmt,
-                    "subject":subject,
+                    "subject":meta.get("subject",""),
                     "language":languageVar.get(),
                     "fileName":f,
                     "fullPath":full,
@@ -325,20 +325,59 @@ df = pd.DataFrame(all_rows)  # refresh df to include subset CSVs
 # ==================================================
 # Write DAMSG output (master CSV/XLSX including subset CSVs)
 # ==================================================
-outRoot=os.path.join(rootFolder,"DAMSG_output",RUN_TIMESTAMP)
-os.makedirs(outRoot,exist_ok=True)
+outRoot = os.path.join(rootFolder, "DAMSG_output", RUN_TIMESTAMP)
+os.makedirs(outRoot, exist_ok=True)
 
-if outputChoiceVar.get() in ("Both","CSV only"):
-    df.to_csv(os.path.join(outRoot,f"imageFilesList_{RUN_TIMESTAMP}.csv"),index=False)
-if outputChoiceVar.get() in ("Both","Excel only"):
-    xlsx=os.path.join(outRoot,f"imageFilesList_{RUN_TIMESTAMP}.xlsx")
-    df.to_excel(xlsx,index=False)
-    system=platform.system()
-    if system=="Windows":
-        os.startfile(xlsx)
-    elif system=="Darwin":
-        subprocess.run(["open",xlsx])
-    else:
-        subprocess.run(["xdg-open",xlsx])
+# sanitize scan mode for filename: replace spaces, +, / with underscores, lowercase
+scan_mode_str = scanModeVar.get().replace(" ", "_").replace("+", "plus").replace("/", "_").lower()
+
+# append only the relevant code for single collection or single institution
+if scanModeVar.get() == "Single Collection":
+    extra_str = f"_{collectionVar.get().lower()}"
+elif scanModeVar.get() == "All Collections (selected institution)":
+    extra_str = f"_{institutionVar.get().lower()}"
+else:
+    extra_str = ""
+
+# CSV output
+if outputChoiceVar.get() in ("Both", "CSV only"):
+    csv_path = os.path.join(outRoot,
+                            f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.csv")
+    df.to_csv(csv_path, index=False)
+
+# Excel output
+if outputChoiceVar.get() in ("Both", "Excel only"):
+    xlsx_path = os.path.join(outRoot,
+                             f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.xlsx")
+    df.to_excel(xlsx_path, index=False)
 
 print(f"Processing complete. DAMSG master export includes all files and newest subset CSVs.\nOutput folder: {outRoot}")
+
+# ==================================================
+# Open output file automatically
+# ==================================================
+def open_file(path):
+    system = platform.system()
+    try:
+        if system == "Windows":
+            os.startfile(path)
+        elif system == "Darwin":
+            subprocess.run(["open", path], check=True)
+        else:  # Linux / others
+            subprocess.run(["xdg-open", path], check=True)
+    except Exception as e:
+        print(f"Could not open {path}: {e}")
+
+# CSV output
+if outputChoiceVar.get() in ("Both", "CSV only"):
+    csv_path = os.path.join(outRoot,
+                            f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.csv")
+    df.to_csv(csv_path, index=False)
+    open_file(csv_path)  # <--- open CSV automatically
+
+# Excel output
+if outputChoiceVar.get() in ("Both", "Excel only"):
+    xlsx_path = os.path.join(outRoot,
+                             f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.xlsx")
+    df.to_excel(xlsx_path, index=False)
+    open_file(xlsx_path)  # <--- open Excel automatically
