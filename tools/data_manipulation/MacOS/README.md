@@ -21,6 +21,11 @@ pip install pandas openpyxl
 ```
 **Note:** openpyxl is required for writing .xlsx files.
 
+You'll need exifread in order to pull the created date from the image:
+```
+python3 -m pip install exifread
+```
+
 ## Usage
 1. Download or clone this repository.
 2. Run the script in your terminal or IDE:
