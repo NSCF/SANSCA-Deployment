@@ -91,20 +91,28 @@ mappingDF = None
 # ==================================================
 # UI functions
 # ==================================================
-
+#/Users/klippies/Projects/Coding/github_repository_clones/SANSCA-Deployment/tools/data_manipulation/Windows/NSCF-Logo-crop.png
 # Logo
-logo_path = os.path.join(os.path.dirname(__file__), "NSCF-Logo-crop")
+logo_path = os.path.join(
+    os.path.dirname(__file__), "NSCF-Logo-crop.png"
+)
+
 try:
     logo_img = Image.open(logo_path)
-    logo_img = logo_img.resize((200, 100), Image.Resampling.LANCZOS)
-    logo_tk = ImageTk.PhotoImage(logo_img)
-    logo_label = Label(root, image=logo_tk)
+    # Resize to fit nicely at the top
+    logo_img = logo_img.resize((300, 150), Image.Resampling.LANCZOS)
+    root.logo_tk = ImageTk.PhotoImage(logo_img)
+    logo_label = Label(root, image=root.logo_tk)
     logo_label.pack(pady=10)
 except Exception as e:
+    # fallback placeholder if logo can't be loaded
+    Label(root, text="[LOGO]", font=("Arial", 20, "bold"), fg="gray").pack(pady=10)
     print(f"Logo could not be loaded: {e}")
 
-# Then continue with your existing labels and buttons...
-Label(root, text="Select Root Folder and Mapping CSV", font=("Arial", 12, "bold")).pack(pady=10)
+# -------------------------------
+# Main heading
+# -------------------------------
+Label(root, text="Select Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
 
 def selectRootFolder():
     p = filedialog.askdirectory()
