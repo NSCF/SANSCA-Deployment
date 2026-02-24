@@ -4,12 +4,13 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 from tkinter import (
-    Tk, Label, Button, StringVar, OptionMenu,
+    Tk, Canvas, Label, Button, StringVar, OptionMenu,
     filedialog, messagebox, DISABLED, NORMAL
 )
 from PIL import Image, ExifTags, ImageTk
 import platform
 import sys
+import pathlib
 
 # ==================================================
 # Run timestamp
@@ -22,6 +23,19 @@ RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 INSTITUTION_CODE_MAP = {
     "IZIKO": "Iziko Museum of South Africa",
     "DNMNH": "Ditsong National Museum of Natural History"
+}
+
+# ==================================================
+# View code map
+# ==================================================
+VIEW_CODE_MAP = {
+    "D": "dorsal view of specimen",
+    "V": "ventral view of specimen",
+    "L": "lateral view of specimen",
+    "A": "anterior view of specimen",
+    "P": "posterior view of specimen",
+    "label": "close-up view of specimen label",
+    # add all your codes here
 }
 
 # ==================================================
@@ -91,27 +105,25 @@ mappingDF = None
 # ==================================================
 # UI functions
 # ==================================================
-#/Users/klippies/Projects/Coding/github_repository_clones/SANSCA-Deployment/tools/data_manipulation/Windows/NSCF-Logo-crop.png
-# Logo
-logo_path = os.path.join(
-    os.path.dirname(__file__), "NSCF-Logo-crop.png"
-)
+script_dir = pathlib.Path(__file__).parent.resolve()
+logo_path = script_dir / "nscf_logo_crop.png"
+print("Resolved logo path:", logo_path)
+print("Exists?", logo_path.exists())
+
+canvas = Canvas(root, width=300, height=150, bg="white", highlightthickness=0)
+canvas.pack(pady=10)
 
 try:
-    logo_img = Image.open(logo_path)
-    # Resize to fit nicely at the top
+    logo_img = Image.open(logo_path).convert("RGB")
     logo_img = logo_img.resize((300, 150), Image.Resampling.LANCZOS)
     root.logo_tk = ImageTk.PhotoImage(logo_img)
-    logo_label = Label(root, image=root.logo_tk)
-    logo_label.pack(pady=10)
+    canvas.create_image(0, 0, anchor="nw", image=root.logo_tk)
 except Exception as e:
-    # fallback placeholder if logo can't be loaded
-    Label(root, text="[LOGO]", font=("Arial", 20, "bold"), fg="gray").pack(pady=10)
+    canvas.create_rectangle(0, 0, 300, 150, fill="lightgray")
+    canvas.create_text(150, 75, text="[LOGO]", font=("Arial", 20, "bold"), fill="gray")
     print(f"Logo could not be loaded: {e}")
 
-# -------------------------------
-# Main heading
-# -------------------------------
+Label(root, text="Select Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
 Label(root, text="Select Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
 
 def selectRootFolder():
@@ -121,9 +133,6 @@ def selectRootFolder():
     rootFolderVar.set(p)
     rootLabel.config(text=p)
 
-    # --------------------------------------------------
-    # Auto-load mapping from SANSCA/DAMSG_mapping
-    # --------------------------------------------------
     global mappingDF
     mapping_path = os.path.join(p, "DAMSG_mapping", "collections_mapping_2026.csv")
     if not os.path.isfile(mapping_path):
@@ -139,7 +148,6 @@ def selectRootFolder():
         mappingDF = None
         return
 
-    # Check required columns
     required = {"institutionCode","collectionCode","creator","contributor",
                 "license","rightsHolder","holdingInstitution","description"}
     missing = required - set(df.columns)
@@ -150,7 +158,6 @@ def selectRootFolder():
         return
 
     mappingDF = df
-    # Update institution and collection options
     updateInstitutionOptions()
     updateCollectionOptions()
     updateScanModeUI()
@@ -186,7 +193,7 @@ def updateScanModeUI(*args):
         institutionMenu.config(state=NORMAL)
         collectionMenu.config(state=DISABLED)
         collectionVar.set("All Collections")
-    else:  # All Institutions + Collections
+    else:
         institutionMenu.config(state=DISABLED)
         collectionMenu.config(state=DISABLED)
         institutionVar.set("All Institutions")
@@ -201,9 +208,6 @@ scanModeVar.trace_add("write", updateScanModeUI)
 Button(root,text="Select SANSCA Root Folder",command=selectRootFolder,bg="lightgreen").pack(fill="x", padx=20, pady=5)
 rootLabel=Label(root,text="",wraplength=800,anchor="w")
 rootLabel.pack()
-#Button(root,text="Select Metadata Mapping CSV",command=selectMappingCSV,bg="orange").pack(fill="x", padx=20, pady=5)
-#mappingLabel=Label(root,text="",wraplength=800,anchor="w")
-#mappingLabel.pack()
 
 Label(root,text="Scan Mode:").pack(pady=5)
 OptionMenu(root,scanModeVar,*scanModes).pack(fill="x", padx=20)
@@ -262,13 +266,20 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 base = os.path.splitext(f)[0]
                 fmt = os.path.splitext(f)[1].lower()
 
-                # --------------------------------------------------
-                # Determine correct asset category
-                # Files inside /metadata/ get <category>_metadata
-                # --------------------------------------------------
                 asset_category = categoryRoot
                 if os.path.sep + "metadata" + os.path.sep in full:
                     asset_category = f"{categoryRoot}_metadata"
+
+                # -------------------------
+                # Parse view code from title
+                # -------------------------
+                parts = base.rsplit("_", 1)
+                catalog_number = parts[0]
+                view_code = parts[1] if len(parts) > 1 else ""
+                view_desc = VIEW_CODE_MAP.get(view_code.lower(), "")
+                description_text = meta["description"]
+                if view_desc:
+                    description_text += f" ({view_desc})"
 
                 rows.append({
                     "documentId": f"{base}_{collectionCode}_{hash(rel) & 0xffff}",
@@ -278,7 +289,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "institutionName": INSTITUTION_CODE_MAP.get(institutionCode, institutionCode),
                     "creator": meta["creator"],
                     "contributor": meta["contributor"],
-                    "description": f'{meta["description"]} ({collectionCode})',
+                    "description": description_text,
                     "rightsHolder": meta["rightsHolder"],
                     "holdingInstitution": meta["holdingInstitution"],
                     "license": meta["license"],
@@ -294,11 +305,11 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
 
     return rows
 
+# ==================================================
+# Scan and generate DataFrame, subsets, and outputs
+# ==================================================
 categories = [d for d in os.listdir(rootFolder) if os.path.isdir(os.path.join(rootFolder, d))]
 
-# ==================================================
-# Scan and build main DataFrame
-# ==================================================
 for cat in categories:
     cat_path=os.path.join(rootFolder,cat)
     if not os.path.isdir(cat_path):
@@ -323,7 +334,7 @@ if df.empty:
     sys.exit("No matching files found for selected filter.")
 
 # ==================================================
-# Generate subset CSVs (images only) per collection
+# Generate subset CSVs and update master DataFrame
 # ==================================================
 subset_files = []
 for cat in categories:
@@ -346,7 +357,6 @@ for cat in categories:
                 subset.to_csv(subset_path,index=False)
                 subset_files.append(subset_path)
                 print(f"Collection metadata CSV generated: {subset_path}")
-                # Add the subset CSV itself as a file in master df
                 all_rows.append({
                     "fileName":os.path.basename(subset_path),
                     "documentId":f"{coll}_subset_{RUN_TIMESTAMP}",
@@ -369,18 +379,15 @@ for cat in categories:
                     "assetCategory":f"{cat}_metadata"
                 })
 
-df = pd.DataFrame(all_rows)  # refresh df to include subset CSVs
+df = pd.DataFrame(all_rows)
 
 # ==================================================
-# Write DAMSG output (master CSV/XLSX including subset CSVs)
+# Write DAMSG output
 # ==================================================
 outRoot = os.path.join(rootFolder, "DAMSG_output", RUN_TIMESTAMP)
 os.makedirs(outRoot, exist_ok=True)
 
-# sanitize scan mode for filename: replace spaces, +, / with underscores, lowercase
 scan_mode_str = scanModeVar.get().replace(" ", "_").replace("+", "plus").replace("/", "_").lower()
-
-# append only the relevant code for single collection or single institution
 if scanModeVar.get() == "Single Collection":
     extra_str = f"_{collectionVar.get().lower()}"
 elif scanModeVar.get() == "All Collections (selected institution)":
@@ -388,13 +395,11 @@ elif scanModeVar.get() == "All Collections (selected institution)":
 else:
     extra_str = ""
 
-# CSV output
 if outputChoiceVar.get() in ("Both", "CSV only"):
     csv_path = os.path.join(outRoot,
                             f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.csv")
     df.to_csv(csv_path, index=False)
 
-# Excel output
 if outputChoiceVar.get() in ("Both", "Excel only"):
     xlsx_path = os.path.join(outRoot,
                              f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.xlsx")
@@ -412,21 +417,19 @@ def open_file(path):
             os.startfile(path)
         elif system == "Darwin":
             subprocess.run(["open", path], check=True)
-        else:  # Linux / others
+        else:
             subprocess.run(["xdg-open", path], check=True)
     except Exception as e:
         print(f"Could not open {path}: {e}")
 
-# CSV output
 if outputChoiceVar.get() in ("Both", "CSV only"):
     csv_path = os.path.join(outRoot,
                             f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.csv")
     df.to_csv(csv_path, index=False)
-    open_file(csv_path)  # <--- open CSV automatically
+    open_file(csv_path)
 
-# Excel output
 if outputChoiceVar.get() in ("Both", "Excel only"):
     xlsx_path = os.path.join(outRoot,
                              f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.xlsx")
     df.to_excel(xlsx_path, index=False)
-    open_file(xlsx_path)  # <--- open Excel automatically
+    open_file(xlsx_path)
