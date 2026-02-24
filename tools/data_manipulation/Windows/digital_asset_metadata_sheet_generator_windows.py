@@ -29,11 +29,11 @@ INSTITUTION_CODE_MAP = {
 # View code map
 # ==================================================
 VIEW_CODE_MAP = {
-    "D": "dorsal view of specimen",
-    "V": "ventral view of specimen",
-    "L": "lateral view of specimen",
-    "A": "anterior view of specimen",
-    "P": "posterior view of specimen",
+    "cd": "Dorsal view of specimen cranium",
+    "cv": "Ventral view of specimen cranium",
+    "mrl": "Proximal lateral view of specimen mandible",
+    "sd": "Dorsal view of specimen skin",
+    "mo": "Occlusional view of specimen mandible",
     "label": "close-up view of specimen label",
     # add all your codes here
 }
@@ -271,15 +271,17 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     asset_category = f"{categoryRoot}_metadata"
 
                 # -------------------------
-                # Parse view code from title
+                # Parse catalog number and view code
                 # -------------------------
-                parts = base.rsplit("_", 1)
-                catalog_number = parts[0]
+                parts = base.split("_")
+                #catalog_number = parts[0]
                 view_code = parts[1] if len(parts) > 1 else ""
                 view_desc = VIEW_CODE_MAP.get(view_code.lower(), "")
-                description_text = meta["description"]
-                if view_desc:
-                    description_text += f" ({view_desc})"
+
+                # -------------------------
+                # Build description properly
+                # -------------------------
+                description_text = view_desc if view_desc else collectionCode 
 
                 rows.append({
                     "documentId": f"{base}_{collectionCode}_{hash(rel) & 0xffff}",
