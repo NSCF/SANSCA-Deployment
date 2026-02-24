@@ -216,39 +216,49 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
     collectionRoot = os.path.join(rootFolder, categoryRoot, institutionCode, collectionCode)
     if not os.path.isdir(collectionRoot):
         return []
+
     rows = []
-    for r,_,files in os.walk(collectionRoot):
+    for r, _, files in os.walk(collectionRoot):
         for f in files:
             if f.lower().endswith(extensions):
-                full=os.path.join(r,f)
-                rel=os.path.relpath(full,rootFolder)
-                base=os.path.splitext(f)[0]
-                fmt=os.path.splitext(f)[1].lower()
-                subject = "metadata" if fmt==".csv" else ""
+                full = os.path.join(r, f)
+                rel = os.path.relpath(full, rootFolder)
+                base = os.path.splitext(f)[0]
+                fmt = os.path.splitext(f)[1].lower()
+
+                # --------------------------------------------------
+                # Determine correct asset category
+                # Files inside /metadata/ get <category>_metadata
+                # --------------------------------------------------
+                asset_category = categoryRoot
+                if os.path.sep + "metadata" + os.path.sep in full:
+                    asset_category = f"{categoryRoot}_metadata"
+
                 rows.append({
-                    "documentId":f"{base}_{collectionCode}_{hash(rel)&0xffff}",
-                    "title":f"{base} ({collectionCode})",
-                    "institutionCode":institutionCode,
-                    "collectionCode":collectionCode,
-                    "institutionName":INSTITUTION_CODE_MAP.get(institutionCode,institutionCode),
-                    "creator":meta["creator"],
-                    "contributor":meta["contributor"],
-                    "description":f'{meta["description"]} ({collectionCode})',
-                    "rightsHolder":meta["rightsHolder"],
-                    "holdingInstitution":meta["holdingInstitution"],
-                    "license":meta["license"],
-                    "dateCreated":getDateCreated(full),
-                    "format":fmt,
-                    "subject":meta.get("subject",""),
-                    "language":languageVar.get(),
-                    "fileName":f,
-                    "fullPath":full,
-                    "relativePath":rel,
-                    "assetCategory":categoryRoot
+                    "documentId": f"{base}_{collectionCode}_{hash(rel) & 0xffff}",
+                    "title": f"{base} ({collectionCode})",
+                    "institutionCode": institutionCode,
+                    "collectionCode": collectionCode,
+                    "institutionName": INSTITUTION_CODE_MAP.get(institutionCode, institutionCode),
+                    "creator": meta["creator"],
+                    "contributor": meta["contributor"],
+                    "description": f'{meta["description"]} ({collectionCode})',
+                    "rightsHolder": meta["rightsHolder"],
+                    "holdingInstitution": meta["holdingInstitution"],
+                    "license": meta["license"],
+                    "dateCreated": getDateCreated(full),
+                    "format": fmt,
+                    "subject": "metadata" if fmt == ".csv" else meta.get("subject", ""),
+                    "language": languageVar.get(),
+                    "fileName": f,
+                    "fullPath": full,
+                    "relativePath": rel,
+                    "assetCategory": asset_category
                 })
+
     return rows
 
-categories = [d for d in os.listdir(rootFolder) if os.path.isdir(os.path.join(rootFolder,d))]
+categories = [d for d in os.listdir(rootFolder) if os.path.isdir(os.path.join(rootFolder, d))]
 
 # ==================================================
 # Scan and build main DataFrame
@@ -289,7 +299,10 @@ for cat in categories:
         inst_path=os.path.join(cat_path,inst)
         collections=[d for d in os.listdir(inst_path) if os.path.isdir(os.path.join(inst_path,d))]
         for coll in collections:
-            subset=df[(df["collectionCode"]==coll)&(df["format"]!=".csv")]
+            subset = df[
+                (df["collectionCode"] == coll) &
+                 (df["assetCategory"] == cat) &
+                 (df["format"] != ".csv")]
             if not subset.empty:
                 meta_folder=os.path.join(inst_path,coll,"metadata")
                 os.makedirs(meta_folder,exist_ok=True)
@@ -317,7 +330,7 @@ for cat in categories:
                     "language":languageVar.get(),
                     "fullPath":subset_path,
                     "relativePath":os.path.relpath(subset_path,rootFolder),
-                    "assetCategory":"collection_metadata"
+                    "assetCategory":f"{cat}_metadata"
                 })
 
 df = pd.DataFrame(all_rows)  # refresh df to include subset CSVs
