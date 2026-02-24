@@ -7,7 +7,7 @@ from tkinter import (
     Tk, Label, Button, StringVar, OptionMenu,
     filedialog, messagebox, DISABLED, NORMAL
 )
-from PIL import Image, ExifTags
+from PIL import Image, ExifTags, ImageTk
 import platform
 import sys
 
@@ -91,30 +91,58 @@ mappingDF = None
 # ==================================================
 # UI functions
 # ==================================================
+
+# Logo
+logo_path = os.path.join(os.path.dirname(__file__), "NSCF-Logo-crop")
+try:
+    logo_img = Image.open(logo_path)
+    logo_img = logo_img.resize((200, 100), Image.Resampling.LANCZOS)
+    logo_tk = ImageTk.PhotoImage(logo_img)
+    logo_label = Label(root, image=logo_tk)
+    logo_label.pack(pady=10)
+except Exception as e:
+    print(f"Logo could not be loaded: {e}")
+
+# Then continue with your existing labels and buttons...
+Label(root, text="Select Root Folder and Mapping CSV", font=("Arial", 12, "bold")).pack(pady=10)
+
 def selectRootFolder():
     p = filedialog.askdirectory()
-    if p:
-        rootFolderVar.set(p)
-        rootLabel.config(text=p)
-
-def selectMappingCSV():
-    global mappingDF
-    p = filedialog.askopenfilename(filetypes=[("CSV files","*.csv")])
     if not p:
         return
-    try:
-        df = pd.read_csv(p)
-    except Exception as e:
-        messagebox.showerror("CSV Error",str(e))
+    rootFolderVar.set(p)
+    rootLabel.config(text=p)
+
+    # --------------------------------------------------
+    # Auto-load mapping from SANSCA/DAMSG_mapping
+    # --------------------------------------------------
+    global mappingDF
+    mapping_path = os.path.join(p, "DAMSG_mapping", "collections_mapping_2026.csv")
+    if not os.path.isfile(mapping_path):
+        messagebox.showerror("Mapping CSV Error",
+                             f"Mapping file not found at:\n{mapping_path}")
+        mappingDF = None
         return
-    required = {"institutionCode","collectionCode","creator","contributor","license","rightsHolder","holdingInstitution","description"}
+
+    try:
+        df = pd.read_csv(mapping_path)
+    except Exception as e:
+        messagebox.showerror("CSV Error", str(e))
+        mappingDF = None
+        return
+
+    # Check required columns
+    required = {"institutionCode","collectionCode","creator","contributor",
+                "license","rightsHolder","holdingInstitution","description"}
     missing = required - set(df.columns)
     if missing:
-        messagebox.showerror("Mapping CSV Error",f"Missing required columns:\n{', '.join(sorted(missing))}")
+        messagebox.showerror("Mapping CSV Error",
+                             f"Missing required columns:\n{', '.join(sorted(missing))}")
+        mappingDF = None
         return
+
     mappingDF = df
-    mappingFileVar.set(p)
-    mappingLabel.config(text=p)
+    # Update institution and collection options
     updateInstitutionOptions()
     updateCollectionOptions()
     updateScanModeUI()
@@ -165,9 +193,9 @@ scanModeVar.trace_add("write", updateScanModeUI)
 Button(root,text="Select SANSCA Root Folder",command=selectRootFolder,bg="lightgreen").pack(fill="x", padx=20, pady=5)
 rootLabel=Label(root,text="",wraplength=800,anchor="w")
 rootLabel.pack()
-Button(root,text="Select Metadata Mapping CSV",command=selectMappingCSV,bg="orange").pack(fill="x", padx=20, pady=5)
-mappingLabel=Label(root,text="",wraplength=800,anchor="w")
-mappingLabel.pack()
+#Button(root,text="Select Metadata Mapping CSV",command=selectMappingCSV,bg="orange").pack(fill="x", padx=20, pady=5)
+#mappingLabel=Label(root,text="",wraplength=800,anchor="w")
+#mappingLabel.pack()
 
 Label(root,text="Scan Mode:").pack(pady=5)
 OptionMenu(root,scanModeVar,*scanModes).pack(fill="x", padx=20)
@@ -236,7 +264,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
 
                 rows.append({
                     "documentId": f"{base}_{collectionCode}_{hash(rel) & 0xffff}",
-                    "title": f"{base} ({collectionCode})",
+                    "title": base,
                     "institutionCode": institutionCode,
                     "collectionCode": collectionCode,
                     "institutionName": INSTITUTION_CODE_MAP.get(institutionCode, institutionCode),
