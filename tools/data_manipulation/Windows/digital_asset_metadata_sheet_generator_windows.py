@@ -31,11 +31,14 @@ INSTITUTION_CODE_MAP = {
 VIEW_CODE_MAP = {
     "cd": "Dorsal view of specimen cranium",
     "cv": "Ventral view of specimen cranium",
-    "mrl": "Proximal lateral view of specimen mandible",
+    "mrl": "Right lateral view of specimen mandible",
     "sd": "Dorsal view of specimen skin",
     "mo": "Occlusional view of specimen mandible",
-    "label": "close-up view of specimen label",
-    # add all your codes here
+    "cll": "Left lateral view of specimen cranium",
+    "sv": "Ventral view of specimen skin",
+    "crl": "Right lateral view of specimen cranium",
+    "mll": "Left lateral view of specimen mandible",
+    "label": "Close-up view of specimen label"
 }
 
 # ==================================================
@@ -123,7 +126,6 @@ except Exception as e:
     canvas.create_text(150, 75, text="[LOGO]", font=("Arial", 20, "bold"), fill="gray")
     print(f"Logo could not be loaded: {e}")
 
-Label(root, text="Select Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
 Label(root, text="Select Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
 
 def selectRootFolder():
@@ -271,10 +273,9 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     asset_category = f"{categoryRoot}_metadata"
 
                 # -------------------------
-                # Parse catalog number and view code
+                # Parse view code
                 # -------------------------
                 parts = base.split("_")
-                #catalog_number = parts[0]
                 view_code = parts[1] if len(parts) > 1 else ""
                 view_desc = VIEW_CODE_MAP.get(view_code.lower(), "")
 
@@ -308,7 +309,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
     return rows
 
 # ==================================================
-# Scan and generate DataFrame, subsets, and outputs
+# Scan, generate subset CSVs, and append newest metadata
 # ==================================================
 categories = [d for d in os.listdir(rootFolder) if os.path.isdir(os.path.join(rootFolder, d))]
 
@@ -329,59 +330,61 @@ for cat in categories:
                 meta=mappingDF[(mappingDF["institutionCode"]==inst)&(mappingDF["collectionCode"]==coll)].iloc[0]
             except IndexError:
                 continue
+            # Scan files
             all_rows.extend(scan_collection(cat,inst,coll,meta))
-
-df=pd.DataFrame(all_rows)
-if df.empty:
-    sys.exit("No matching files found for selected filter.")
-
-# ==================================================
-# Generate subset CSVs and update master DataFrame
-# ==================================================
-subset_files = []
-for cat in categories:
-    cat_path=os.path.join(rootFolder,cat)
-    if not os.path.isdir(cat_path):
-        continue
-    insts=[d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path,d))]
-    for inst in insts:
-        inst_path=os.path.join(cat_path,inst)
-        collections=[d for d in os.listdir(inst_path) if os.path.isdir(os.path.join(inst_path,d))]
-        for coll in collections:
-            subset = df[
-                (df["collectionCode"] == coll) &
-                 (df["assetCategory"] == cat) &
-                 (df["format"] != ".csv")]
-            if not subset.empty:
+            # Generate subset CSV for this collection
+            subset_rows = [r for r in all_rows if r["collectionCode"]==coll and r["assetCategory"]==cat and r["format"] != ".csv"]
+            if subset_rows:
                 meta_folder=os.path.join(inst_path,coll,"metadata")
                 os.makedirs(meta_folder,exist_ok=True)
                 subset_path=os.path.join(meta_folder,f"{coll}_metadata_{RUN_TIMESTAMP}.csv")
-                subset.to_csv(subset_path,index=False)
-                subset_files.append(subset_path)
+                pd.DataFrame(subset_rows).to_csv(subset_path,index=False)
                 print(f"Collection metadata CSV generated: {subset_path}")
+                # Append newest metadata CSV to all_rows
                 all_rows.append({
-                    "fileName":os.path.basename(subset_path),
-                    "documentId":f"{coll}_subset_{RUN_TIMESTAMP}",
-                    "title":f"{coll}_subset_{RUN_TIMESTAMP}",
-                    "institutionCode":inst,
-                    "collectionCode":coll,
-                    "institutionName":INSTITUTION_CODE_MAP.get(inst,inst),
-                    "creator":meta["creator"],
-                    "contributor":meta["contributor"],
-                    "description":f"Subset metadata for {coll}",
-                    "rightsHolder":meta["rightsHolder"],
-                    "holdingInstitution":meta["holdingInstitution"],
-                    "license":meta["license"],
-                    "dateCreated":datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
-                    "format":".csv",
-                    "subject":"metadata_subset",
-                    "language":languageVar.get(),
-                    "fullPath":subset_path,
-                    "relativePath":os.path.relpath(subset_path,rootFolder),
-                    "assetCategory":f"{cat}_metadata"
+                    "fileName": os.path.basename(subset_path),
+                    "documentId": f"{coll}_metadata_{RUN_TIMESTAMP}",
+                    "title": os.path.basename(subset_path),
+                    "institutionCode": inst,
+                    "collectionCode": coll,
+                    "institutionName": INSTITUTION_CODE_MAP.get(inst, inst),
+                    "creator": meta["creator"],
+                    "contributor": meta["contributor"],
+                    "description": (
+                        f"Metadata file for {coll}" if scanMode=="Single Collection" 
+                        else f"Metadata file for {inst}" if scanMode=="All Collections (selected institution)" 
+                        else "Metadata file for all institutions"
+                    ),
+                    "rightsHolder": meta["rightsHolder"],
+                    "holdingInstitution": meta["holdingInstitution"],
+                    "license": meta["license"],
+                    "dateCreated": datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
+                    "format": ".csv",
+                    "subject": "metadata",
+                    "language": languageVar.get(),
+                    "fullPath": subset_path,
+                    "relativePath": os.path.relpath(subset_path, rootFolder),
+                    "assetCategory": f"{cat}_metadata"
                 })
 
+# ==================================================
+# Build master DataFrame and apply dynamic description to existing CSVs
+# ==================================================
 df = pd.DataFrame(all_rows)
+if df.empty:
+    sys.exit("No matching files found for selected filter.")
+
+def update_master_descriptions(row):
+    if row["format"] == ".csv":
+        if scanMode == "Single Collection":
+            return f"Metadata file for {row['collectionCode']}"
+        elif scanMode == "All Collections (selected institution)":
+            return f"Metadata file for {row['institutionCode']}"
+        else:
+            return "Metadata file for all institutions"
+    return row["description"]
+
+df["description"] = df.apply(update_master_descriptions, axis=1)
 
 # ==================================================
 # Write DAMSG output
@@ -425,13 +428,7 @@ def open_file(path):
         print(f"Could not open {path}: {e}")
 
 if outputChoiceVar.get() in ("Both", "CSV only"):
-    csv_path = os.path.join(outRoot,
-                            f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.csv")
-    df.to_csv(csv_path, index=False)
     open_file(csv_path)
 
 if outputChoiceVar.get() in ("Both", "Excel only"):
-    xlsx_path = os.path.join(outRoot,
-                             f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.xlsx")
-    df.to_excel(xlsx_path, index=False)
     open_file(xlsx_path)
