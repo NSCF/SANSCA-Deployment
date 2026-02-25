@@ -385,7 +385,7 @@ for cat in categories:
                     "license": meta["license"],
                     "dateCreated": datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
                     "format": ".csv",
-                    "subject": "metadata",
+                    "subject": "Metadata",
                     "language": languageVar.get(),
                     "fullPath": subset_path,
                     "relativePath": os.path.relpath(subset_path, rootFolder),
