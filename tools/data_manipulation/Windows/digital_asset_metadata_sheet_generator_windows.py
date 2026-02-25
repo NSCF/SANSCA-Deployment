@@ -11,6 +11,7 @@ from PIL import Image, ExifTags, ImageTk
 import platform
 import sys
 import pathlib
+import hashlib
 
 # ==================================================
 # Run timestamp
@@ -76,6 +77,24 @@ def getDateCreated(path):
         return ""
 
 # ==================================================
+# Deterministic documentId generator for image/assets
+# ==================================================
+def generate_document_id(collection_code, base_name, relative_path, length=8):
+    clean_collection = collection_code.replace("_", "")
+    clean_base = base_name.replace("_", "")
+    h = hashlib.sha1(relative_path.encode("utf-8")).hexdigest()[:length]
+    return f"{clean_collection}{clean_base}{h}"
+
+# ==================================================
+# Deterministic metadata documentId generator
+# ==================================================
+def generate_metadata_document_id(collection_code, category, relative_path, length=8):
+    clean_collection = collection_code.replace("_", "")
+    clean_category = category.replace("_", "").upper()
+    h = hashlib.sha1(relative_path.encode("utf-8")).hexdigest()[:length]
+    return f"{clean_collection}METADATAINVENTORY{clean_category}{h}"
+
+# ==================================================
 # Tkinter UI
 # ==================================================
 root = Tk()
@@ -110,8 +129,6 @@ mappingDF = None
 # ==================================================
 script_dir = pathlib.Path(__file__).parent.resolve()
 logo_path = script_dir / "nscf_logo_crop.png"
-print("Resolved logo path:", logo_path)
-print("Exists?", logo_path.exists())
 
 canvas = Canvas(root, width=300, height=150, bg="white", highlightthickness=0)
 canvas.pack(pady=10)
@@ -124,7 +141,6 @@ try:
 except Exception as e:
     canvas.create_rectangle(0, 0, 300, 150, fill="lightgray")
     canvas.create_text(150, 75, text="[LOGO]", font=("Arial", 20, "bold"), fill="gray")
-    print(f"Logo could not be loaded: {e}")
 
 Label(root, text="Select Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
 
@@ -243,7 +259,7 @@ collection = collectionVar.get()
 scanMode = scanModeVar.get()
 
 # ==================================================
-# File scanning logic with multi-mode
+# File scanning logic
 # ==================================================
 fileTypes = {
     "All":[ ".tif",".tiff",".jpg",".jpeg",".nef",".cr2",".cr3",".arw",".dng",".orf",".rw2",".csv"],
@@ -272,20 +288,18 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 if os.path.sep + "metadata" + os.path.sep in full:
                     asset_category = f"{categoryRoot}_metadata"
 
-                # -------------------------
-                # Parse view code
-                # -------------------------
                 parts = base.split("_")
                 view_code = parts[1] if len(parts) > 1 else ""
                 view_desc = VIEW_CODE_MAP.get(view_code.lower(), "")
-
-                # -------------------------
-                # Build description properly
-                # -------------------------
                 description_text = view_desc if view_desc else collectionCode 
 
+                if fmt == ".csv":
+                    doc_id = generate_metadata_document_id(collectionCode, cat, rel)
+                else:
+                    doc_id = generate_document_id(collectionCode, base, rel)
+
                 rows.append({
-                    "documentId": f"{base}_{collectionCode}_{hash(rel) & 0xffff}",
+                    "documentId": doc_id,
                     "title": base,
                     "institutionCode": institutionCode,
                     "collectionCode": collectionCode,
@@ -303,10 +317,24 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "fileName": f,
                     "fullPath": full,
                     "relativePath": rel,
-                    "assetCategory": asset_category
+                    "assetCategory": asset_category,
+                    "scanModeApplied": scanMode
                 })
 
     return rows
+
+# ==================================================
+# Master file paths
+# ==================================================
+master_csv = os.path.join(rootFolder, "DAMSG_output", "digital_asset_inventory_master.csv")
+master_xlsx = os.path.join(rootFolder, "DAMSG_output", "digital_asset_inventory_master.xlsx")
+os.makedirs(os.path.dirname(master_csv), exist_ok=True)
+
+# Load existing master if present
+if os.path.isfile(master_csv):
+    master_df = pd.read_csv(master_csv)
+else:
+    master_df = pd.DataFrame()
 
 # ==================================================
 # Scan, generate subset CSVs, and append newest metadata
@@ -330,8 +358,8 @@ for cat in categories:
                 meta=mappingDF[(mappingDF["institutionCode"]==inst)&(mappingDF["collectionCode"]==coll)].iloc[0]
             except IndexError:
                 continue
-            # Scan files
             all_rows.extend(scan_collection(cat,inst,coll,meta))
+
             # Generate subset CSV for this collection
             subset_rows = [r for r in all_rows if r["collectionCode"]==coll and r["assetCategory"]==cat and r["format"] != ".csv"]
             if subset_rows:
@@ -340,21 +368,18 @@ for cat in categories:
                 subset_path=os.path.join(meta_folder,f"{coll}_metadata_{RUN_TIMESTAMP}.csv")
                 pd.DataFrame(subset_rows).to_csv(subset_path,index=False)
                 print(f"Collection metadata CSV generated: {subset_path}")
-                # Append newest metadata CSV to all_rows
+
+                # Append metadata CSV info to all_rows
                 all_rows.append({
                     "fileName": os.path.basename(subset_path),
-                    "documentId": f"{coll}_metadata_{RUN_TIMESTAMP}",
+                    "documentId": generate_metadata_document_id(coll, cat, os.path.relpath(subset_path, rootFolder)),
                     "title": os.path.basename(subset_path),
                     "institutionCode": inst,
                     "collectionCode": coll,
                     "institutionName": INSTITUTION_CODE_MAP.get(inst, inst),
                     "creator": meta["creator"],
                     "contributor": meta["contributor"],
-                    "description": (
-                        f"Metadata file for {coll}" if scanMode=="Single Collection" 
-                        else f"Metadata file for {inst}" if scanMode=="All Collections (selected institution)" 
-                        else "Metadata file for all institutions"
-                    ),
+                    "description": "",
                     "rightsHolder": meta["rightsHolder"],
                     "holdingInstitution": meta["holdingInstitution"],
                     "license": meta["license"],
@@ -364,56 +389,49 @@ for cat in categories:
                     "language": languageVar.get(),
                     "fullPath": subset_path,
                     "relativePath": os.path.relpath(subset_path, rootFolder),
-                    "assetCategory": f"{cat}_metadata"
+                    "assetCategory": f"{cat}_metadata",
+                    "scanModeApplied": scanMode
                 })
 
 # ==================================================
-# Build master DataFrame and apply dynamic description to existing CSVs
+# Convert new rows to DataFrame
 # ==================================================
-df = pd.DataFrame(all_rows)
-if df.empty:
-    sys.exit("No matching files found for selected filter.")
+new_rows_df = pd.DataFrame(all_rows)
 
-def update_master_descriptions(row):
-    if row["format"] == ".csv":
-        if scanMode == "Single Collection":
+# Only keep rows not already in master
+if not master_df.empty:
+    new_rows_df = new_rows_df[~new_rows_df['relativePath'].isin(master_df['relativePath'])]
+
+# ==================================================
+# Append new rows to master
+# ==================================================
+updated_master_df = pd.concat([master_df, new_rows_df], ignore_index=True)
+
+# ==================================================
+# Apply description only to newly added metadata rows
+# ==================================================
+def apply_description(row):
+    if row["format"] == ".csv" and (row["description"] == "" or pd.isna(row["description"])):
+        mode = row.get("scanModeApplied", "")
+        if mode == "Single Collection":
             return f"Metadata file for {row['collectionCode']}"
-        elif scanMode == "All Collections (selected institution)":
+        elif mode == "All Collections (selected institution)":
             return f"Metadata file for {row['institutionCode']}"
         else:
-            return "Metadata file for all institutions"
+            return "Metadata file for all collections"
     return row["description"]
 
-df["description"] = df.apply(update_master_descriptions, axis=1)
+updated_master_df["description"] = updated_master_df.apply(apply_description, axis=1)
 
 # ==================================================
-# Write DAMSG output
+# Write master CSV/Excel
 # ==================================================
-outRoot = os.path.join(rootFolder, "DAMSG_output", RUN_TIMESTAMP)
-os.makedirs(outRoot, exist_ok=True)
-
-scan_mode_str = scanModeVar.get().replace(" ", "_").replace("+", "plus").replace("/", "_").lower()
-if scanModeVar.get() == "Single Collection":
-    extra_str = f"_{collectionVar.get().lower()}"
-elif scanModeVar.get() == "All Collections (selected institution)":
-    extra_str = f"_{institutionVar.get().lower()}"
-else:
-    extra_str = ""
-
-if outputChoiceVar.get() in ("Both", "CSV only"):
-    csv_path = os.path.join(outRoot,
-                            f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.csv")
-    df.to_csv(csv_path, index=False)
-
-if outputChoiceVar.get() in ("Both", "Excel only"):
-    xlsx_path = os.path.join(outRoot,
-                             f"digital_asset_inventory_{scan_mode_str}{extra_str}_{RUN_TIMESTAMP}.xlsx")
-    df.to_excel(xlsx_path, index=False)
-
-print(f"Processing complete. DAMSG master export includes all files and newest subset CSVs.\nOutput folder: {outRoot}")
+updated_master_df.to_csv(master_csv, index=False)
+updated_master_df.to_excel(master_xlsx, index=False)
+print(f"Processing complete. Master inventory updated: {master_csv}")
 
 # ==================================================
-# Open output file automatically
+# Optionally, open files automatically
 # ==================================================
 def open_file(path):
     system = platform.system()
@@ -428,7 +446,6 @@ def open_file(path):
         print(f"Could not open {path}: {e}")
 
 if outputChoiceVar.get() in ("Both", "CSV only"):
-    open_file(csv_path)
-
+    open_file(master_csv)
 if outputChoiceVar.get() in ("Both", "Excel only"):
-    open_file(xlsx_path)
+    open_file(master_xlsx)
