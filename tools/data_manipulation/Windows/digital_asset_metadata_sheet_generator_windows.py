@@ -22,7 +22,7 @@ RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 # Institution display map (optional)
 # ==================================================
 INSTITUTION_CODE_MAP = {
-    "IZIKO": "Iziko Museum of South Africa",
+    "ISAM": "Iziko Museum of South Africa",
     "DNMNH": "Ditsong National Museum of Natural History"
 }
 
@@ -79,20 +79,22 @@ def getDateCreated(path):
 # ==================================================
 # Deterministic documentId generator for image/assets
 # ==================================================
-def generate_document_id(collection_code, base_name, relative_path, length=8):
+def generate_document_id(institution_code,collection_code, base_name, relative_path, length=8):
+    clean_inst = institution_code.replace("_", "")
     clean_collection = collection_code.replace("_", "")
     clean_base = base_name.replace("_", "")
     h = hashlib.sha1(relative_path.encode("utf-8")).hexdigest()[:length]
-    return f"{clean_collection}{clean_base}{h}"
+    return f"{clean_inst}{clean_collection}{clean_base}{h}"
 
 # ==================================================
 # Deterministic metadata documentId generator
 # ==================================================
-def generate_metadata_document_id(collection_code, category, relative_path, length=8):
+def generate_metadata_document_id(institution_code, collection_code, category, relative_path, length=8):
+    clean_inst = institution_code.replace("_", "")
     clean_collection = collection_code.replace("_", "")
     clean_category = category.replace("_", "").upper()
     h = hashlib.sha1(relative_path.encode("utf-8")).hexdigest()[:length]
-    return f"{clean_collection}METADATAINVENTORY{clean_category}{h}"
+    return f"{clean_inst}{clean_collection}METADATAINVENTORY{clean_category}{h}"
 
 # ==================================================
 # Tkinter UI
@@ -109,17 +111,17 @@ institutionVar = StringVar()
 collectionVar = StringVar()
 fileFilterVar = StringVar()
 outputChoiceVar = StringVar()
-languageVar = StringVar()
+#languageVar = StringVar()
 scanModeVar = StringVar()
 
 fileFilters = ["All","TIFF only","RAW only","JPEG only"]
 outputChoices = ["CSV only","Excel only","Both"]
-languages = ["English","Afrikaans","Latin/Greek"]
+#languages = ["English","Afrikaans","Latin/Greek"]
 scanModes = ["Single Collection","All Collections (selected institution)","All Institutions + Collections"]
 
 fileFilterVar.set(fileFilters[0])
 outputChoiceVar.set(outputChoices[0])
-languageVar.set(languages[0])
+#languageVar.set(languages[0])
 scanModeVar.set(scanModes[0])
 
 mappingDF = None
@@ -239,8 +241,8 @@ collectionMenu.pack(fill="x", padx=20)
 
 Label(root,text="File Filter:").pack(pady=5)
 OptionMenu(root,fileFilterVar,*fileFilters).pack(fill="x", padx=20)
-Label(root,text="Language:").pack(pady=5)
-OptionMenu(root,languageVar,*languages).pack(fill="x", padx=20)
+#Label(root,text="Language:").pack(pady=5)
+#OptionMenu(root,languageVar,*languages).pack(fill="x", padx=20)
 Label(root,text="Output Choice:").pack(pady=5)
 OptionMenu(root,outputChoiceVar,*outputChoices).pack(fill="x", padx=20)
 
@@ -294,32 +296,34 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 description_text = view_desc if view_desc else collectionCode 
 
                 if fmt == ".csv":
-                    doc_id = generate_metadata_document_id(collectionCode, cat, rel)
+                    doc_id = generate_metadata_document_id(institutionCode,collectionCode, cat, rel)
                 else:
-                    doc_id = generate_document_id(collectionCode, base, rel)
+                    doc_id = generate_document_id(institutionCode, collectionCode, base, rel)
 
-                rows.append({
+                row_data = {
                     "documentId": doc_id,
                     "title": base,
                     "institutionCode": institutionCode,
                     "collectionCode": collectionCode,
                     "institutionName": INSTITUTION_CODE_MAP.get(institutionCode, institutionCode),
-                    "creator": meta["creator"],
-                    "contributor": meta["contributor"],
                     "description": description_text,
-                    "rightsHolder": meta["rightsHolder"],
-                    "holdingInstitution": meta["holdingInstitution"],
-                    "license": meta["license"],
                     "dateCreated": getDateCreated(full),
                     "format": fmt,
-                    "subject": "metadata" if fmt == ".csv" else meta.get("subject", ""),
-                    "language": languageVar.get(),
+                    "subject": "Metadata" if fmt == ".csv" else meta.get("subject", ""),
+                    #"language": languageVar.get(),
                     "fileName": f,
                     "fullPath": full,
                     "relativePath": rel,
                     "assetCategory": asset_category,
                     "scanModeApplied": scanMode
-                })
+                }
+
+# Add ALL mapping columns automatically
+                for col in mappingDF.columns:
+                    if col not in row_data:
+                        row_data[col] = meta.get(col, "")
+
+                rows.append(row_data)   
 
     return rows
 
@@ -372,7 +376,7 @@ for cat in categories:
                 # Append metadata CSV info to all_rows
                 all_rows.append({
                     "fileName": os.path.basename(subset_path),
-                    "documentId": generate_metadata_document_id(coll, cat, os.path.relpath(subset_path, rootFolder)),
+                    "documentId": generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
                     "title": os.path.basename(subset_path),
                     "institutionCode": inst,
                     "collectionCode": coll,
@@ -386,7 +390,7 @@ for cat in categories:
                     "dateCreated": datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
                     "format": ".csv",
                     "subject": "Metadata",
-                    "language": languageVar.get(),
+                    #"language": languageVar.get(),
                     "fullPath": subset_path,
                     "relativePath": os.path.relpath(subset_path, rootFolder),
                     "assetCategory": f"{cat}_metadata",
@@ -399,13 +403,51 @@ for cat in categories:
 new_rows_df = pd.DataFrame(all_rows)
 
 # Only keep rows not already in master
+required_master_columns = {
+    "documentId",
+    "relativePath",
+    "collectionCode",
+    "institutionCode"
+}
+
 if not master_df.empty:
-    new_rows_df = new_rows_df[~new_rows_df['relativePath'].isin(master_df['relativePath'])]
+    missing_master_cols = required_master_columns - set(master_df.columns)
+    if missing_master_cols:
+        print("WARNING: Master file is malformed. Rebuilding master.")
+        master_df = pd.DataFrame()
 
 # ==================================================
 # Append new rows to master
 # ==================================================
 updated_master_df = pd.concat([master_df, new_rows_df], ignore_index=True)
+
+# Preserve mapping column order
+mapping_columns = list(mappingDF.columns)
+
+# Ensure system columns appear first (if desired)
+system_columns = [
+    "documentId",
+    "title",
+    "fileName",
+    "relativePath",
+    "fullPath",
+    "format",
+    "assetCategory",
+    "dateCreated",
+    "scanModeApplied"
+]
+
+# Only keep columns that actually exist
+system_columns = [col for col in system_columns if col in updated_master_df.columns]
+mapping_columns = [col for col in mapping_columns if col in updated_master_df.columns]
+
+# Combine while avoiding duplicates
+ordered_columns = system_columns + [
+    col for col in mapping_columns if col not in system_columns
+]
+
+# Apply ordering
+updated_master_df = updated_master_df[ordered_columns]
 
 # ==================================================
 # Apply description only to newly added metadata rows
@@ -433,17 +475,26 @@ print(f"Processing complete. Master inventory updated: {master_csv}")
 # ==================================================
 # Optionally, open files automatically
 # ==================================================
-def open_file(path):
+
+def open_file(filepath):
+    """
+    Open any file in its default application depending on OS.
+    - CSV → Excel (or default CSV app)
+    - CSS → default code editor
+    - Excel → Excel
+    Works on Windows, macOS, Linux
+    """
     system = platform.system()
+
     try:
         if system == "Windows":
-            os.startfile(path)
+            os.startfile(filepath)
         elif system == "Darwin":
-            subprocess.run(["open", path], check=True)
-        else:
-            subprocess.run(["xdg-open", path], check=True)
+            subprocess.run(["open", filepath], check=True)
+        else:  # Linux
+            subprocess.run(["xdg-open", filepath], check=True)
     except Exception as e:
-        print(f"Could not open {path}: {e}")
+        print(f"Could not open {filepath}: {e}")
 
 if outputChoiceVar.get() in ("Both", "CSV only"):
     open_file(master_csv)
