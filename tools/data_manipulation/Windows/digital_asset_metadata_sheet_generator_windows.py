@@ -80,6 +80,7 @@ def getDateCreated(path):
 # Deterministic documentId generator for image/assets
 # ==================================================
 def generate_document_id(institution_code,collection_code, base_name, relative_path, length=8):
+    relative_path = relative_path.replace("\\", "/")
     clean_inst = institution_code.replace("_", "")
     clean_collection = collection_code.replace("_", "")
     clean_base = base_name.replace("_", "")
@@ -90,6 +91,7 @@ def generate_document_id(institution_code,collection_code, base_name, relative_p
 # Deterministic metadata documentId generator
 # ==================================================
 def generate_metadata_document_id(institution_code, collection_code, category, relative_path, length=8):
+    relative_path = relative_path.replace("\\", "/")
     clean_inst = institution_code.replace("_", "")
     clean_collection = collection_code.replace("_", "")
     clean_category = category.replace("_", "").upper()
@@ -259,7 +261,6 @@ scanMode = scanModeVar.get()
 # ==================================================
 # File scanning logic
 # ==================================================
-
 fileTypes = {
     "All":[ ".tif",".tiff",".jpg",".jpeg",".nef",".cr2",".cr3",".arw",".dng",".orf",".rw2",".csv"],
     "TIFF only":[ ".tif",".tiff"],
@@ -293,7 +294,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 description_text = view_desc if view_desc else meta.get("description", collectionCode) 
 
                 if fmt == ".csv":
-                    doc_id = generate_metadata_document_id(institutionCode,collectionCode, cat, rel)
+                    doc_id = generate_metadata_document_id(institutionCode,collectionCode, categoryRoot, rel)
                 else:
                     doc_id = generate_document_id(institutionCode, collectionCode, base, rel)
 
@@ -318,7 +319,6 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 # Add ALL mapping columns automatically
                 for col in mappingDF.columns:
                     if col not in row_data or (col == "additionalNames" and not row_data["additionalNames"].strip()):
-                        # Fill additionalNames from mapping only if empty
                         row_data[col] = meta.get(col, "")
 
                 rows.append(row_data)   
@@ -340,7 +340,6 @@ else:
 # ==================================================
 # Scan, generate subset CSVs, and append newest metadata
 # ==================================================
-
 categories = [d for d in os.listdir(rootFolder) if os.path.isdir(os.path.join(rootFolder, d))]
 
 for cat in categories:
@@ -363,10 +362,8 @@ for cat in categories:
             except IndexError:
                 continue
 
-            # Scan files and add rows
             all_rows.extend(scan_collection(cat, inst, coll, meta))
 
-            # Generate subset CSV for this collection (only non-CSV files)
             subset_rows = [
                 r for r in all_rows
                 if r["collectionCode"] == coll and r["assetCategory"] == cat and r["format"] != ".csv"
@@ -378,7 +375,6 @@ for cat in categories:
                 pd.DataFrame(subset_rows).to_csv(subset_path, index=False)
                 print(f"Collection metadata CSV generated: {subset_path}")
 
-                # Append metadata CSV info to all_rows
                 row_data = {
                     "fileName": os.path.basename(subset_path),
                     "documentId": generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
@@ -388,7 +384,7 @@ for cat in categories:
                     "institutionName": INSTITUTION_CODE_MAP.get(inst, inst),
                     "creator": meta["creator"],
                     "contributor": meta["contributor"],
-                    "description": meta.get("description", ""),  # preserve description
+                    "description": meta.get("description", ""),
                     "rightsHolder": meta["rightsHolder"],
                     "holdingInstitution": meta["holdingInstitution"],
                     "license": meta["license"],
@@ -399,62 +395,99 @@ for cat in categories:
                     "relativePath": os.path.relpath(subset_path, rootFolder),
                     "assetCategory": f"{cat}_metadata",
                     "scanModeApplied": scanMode,
-                    "additionalNames": ""  # start empty
+                    "additionalNames": ""
                 }
 
-                # Fill 'additionalNames' from mapping only if empty
                 if "additionalNames" in mappingDF.columns and not row_data["additionalNames"].strip():
                     row_data["additionalNames"] = meta.get("additionalNames", "")
 
                 all_rows.append(row_data)
 
-# ==================================================
-# Convert new rows to DataFrame
-# ==================================================
 
 # ==================================================
-# Convert new rows to DataFrame
+# Convert all_rows to DataFrame safely
 # ==================================================
-new_rows_df = pd.DataFrame(all_rows)
 
-# -------------------------
-# Remove duplicates based on documentId
-# -------------------------
-if not master_df.empty:
-    new_rows_df = new_rows_df[~new_rows_df['documentId'].isin(master_df['documentId'])]
+expected_columns = [
+    "documentId","title","fileName","relativePath","fullPath",
+    "format","assetCategory","dateCreated","scanModeApplied",
+    "institutionCode","collectionCode","institutionName",
+    "description","additionalNames","creator","contributor",
+    "license","rightsHolder","holdingInstitution","subject"
+]
 
-# -------------------------
-# Preserve description for metadata CSV files
-# -------------------------
-mask = (new_rows_df["format"] == ".csv")
-
-if not master_df.empty:
-    existing_desc = master_df.set_index("documentId")["description"].to_dict()
-    def preserve_or_generate_desc(row):
-        doc_id = row["documentId"]
-        if doc_id in existing_desc and existing_desc[doc_id].strip():
-            return existing_desc[doc_id]  # Keep existing description
-        # Generate description only if none exists in master
-        mode = row.get("scanModeApplied","")
-        if mode=="Single Collection":
-            return f"Metadata file for {row['institutionCode']}_{row['collectionCode']}"
-        elif mode=="All Collections (selected institution)":
-            return f"Metadata file for {row['institutionCode']}"
-        else:
-            return "Metadata file for all collections"
-
-    new_rows_df.loc[mask,"description"] = new_rows_df.loc[mask].apply(preserve_or_generate_desc, axis=1)
+# Create new rows dataframe
+if all_rows:
+    new_rows_df = pd.DataFrame(all_rows)
 else:
-    # First run: generate description normally
-    def generate_desc(row):
-        mode = row.get("scanModeApplied","")
-        if mode=="Single Collection":
-            return f"Metadata file for {row['institutionCode']}_{row['collectionCode']}"
-        elif mode=="All Collections (selected institution)":
-            return f"Metadata file for {row['institutionCode']}"
-        else:
-            return "Metadata file for all collections"
-    new_rows_df.loc[mask,"description"] = new_rows_df.loc[mask].apply(generate_desc, axis=1)
+    new_rows_df = pd.DataFrame(columns=expected_columns)
+
+# Ensure master_df exists and has expected structure
+if master_df.empty:
+    master_df = pd.DataFrame(columns=expected_columns)
+
+# Ensure documentId column exists in both
+if "documentId" not in new_rows_df.columns:
+    new_rows_df["documentId"] = ""
+
+if "documentId" not in master_df.columns:
+    master_df["documentId"] = ""
+
+# Remove duplicates safely
+if not new_rows_df.empty:
+    new_rows_df = new_rows_df[
+        ~new_rows_df["documentId"].isin(master_df["documentId"])
+    ]
+
+# Preserve description for CSV metadata safely
+required_cols = {"format", "description", "documentId", "institutionCode", "collectionCode"}
+if not new_rows_df.empty and required_cols.issubset(new_rows_df.columns):
+    mask_csv = new_rows_df["format"] == ".csv"
+
+    if not master_df.empty and "documentId" in master_df.columns:
+        existing_desc = master_df.set_index("documentId")["description"].to_dict()
+
+        def preserve_or_generate_desc(row):
+            doc_id = row["documentId"]
+            if doc_id in existing_desc and existing_desc[doc_id].strip():
+                return existing_desc[doc_id]
+            mode = row.get("scanModeApplied", "")
+            if mode == "Single Collection":
+                return f"Metadata file for {row['institutionCode']}_{row['collectionCode']}"
+            elif mode == "All Collections (selected institution)":
+                return f"Metadata file for {row['institutionCode']}"
+            else:
+                return "Metadata file for all collections"
+
+        new_rows_df.loc[mask_csv, "description"] = new_rows_df.loc[mask_csv].apply(preserve_or_generate_desc, axis=1)
+    else:
+        def generate_desc(row):
+            mode = row.get("scanModeApplied", "")
+            if mode == "Single Collection":
+                return f"Metadata file for {row['institutionCode']}_{row['collectionCode']}"
+            elif mode == "All Collections (selected institution)":
+                return f"Metadata file for {row['institutionCode']}"
+            else:
+                return "Metadata file for all collections"
+
+        new_rows_df.loc[mask_csv, "description"] = new_rows_df.loc[mask_csv].apply(generate_desc, axis=1)
+
+# Fill additionalNames if empty
+if not new_rows_df.empty and "additionalNames" in new_rows_df.columns and "additionalNames" in mappingDF.columns:
+    mask_additional = new_rows_df["additionalNames"].isna() | (new_rows_df["additionalNames"].str.strip() == "")
+    def fill_additional_names(row):
+        df_match = mappingDF[
+            (mappingDF["institutionCode"] == row["institutionCode"]) &
+            (mappingDF["collectionCode"] == row["collectionCode"])
+        ]
+        if not df_match.empty:
+            return df_match.iloc[0].get("additionalNames", "")
+        return ""
+    
+    new_rows_df.loc[mask_additional, "additionalNames"] = (
+    new_rows_df.loc[mask_additional]
+    .apply(fill_additional_names, axis=1)
+)
 
 # ==================================================
 # Append new rows to master
