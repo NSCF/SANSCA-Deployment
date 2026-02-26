@@ -259,6 +259,7 @@ scanMode = scanModeVar.get()
 # ==================================================
 # File scanning logic
 # ==================================================
+
 fileTypes = {
     "All":[ ".tif",".tiff",".jpg",".jpeg",".nef",".cr2",".cr3",".arw",".dng",".orf",".rw2",".csv"],
     "TIFF only":[ ".tif",".tiff"],
@@ -305,6 +306,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "description": description_text,
                     "dateCreated": getDateCreated(full),
                     "format": fmt,
+                    "additionalNames": "",  # start empty
                     "subject": "Metadata" if fmt == ".csv" else meta.get("subject", ""),
                     "fileName": f,
                     "fullPath": full,
@@ -315,7 +317,8 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
 
                 # Add ALL mapping columns automatically
                 for col in mappingDF.columns:
-                    if col not in row_data:
+                    if col not in row_data or (col == "additionalNames" and not row_data["additionalNames"].strip()):
+                        # Fill additionalNames from mapping only if empty
                         row_data[col] = meta.get(col, "")
 
                 rows.append(row_data)   
@@ -337,38 +340,46 @@ else:
 # ==================================================
 # Scan, generate subset CSVs, and append newest metadata
 # ==================================================
+
 categories = [d for d in os.listdir(rootFolder) if os.path.isdir(os.path.join(rootFolder, d))]
 
 for cat in categories:
-    cat_path=os.path.join(rootFolder,cat)
+    cat_path = os.path.join(rootFolder, cat)
     if not os.path.isdir(cat_path):
         continue
-    insts=[d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path,d))]
+
+    insts = [d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path, d))]
     for inst in insts:
-        inst_path=os.path.join(cat_path,inst)
-        collections=[d for d in os.listdir(inst_path) if os.path.isdir(os.path.join(inst_path,d))]
+        inst_path = os.path.join(cat_path, inst)
+        collections = [d for d in os.listdir(inst_path) if os.path.isdir(os.path.join(inst_path, d))]
         for coll in collections:
-            if scanMode=="Single Collection" and (inst!=institution or coll!=collection):
+            if scanMode == "Single Collection" and (inst != institution or coll != collection):
                 continue
-            if scanMode=="All Collections (selected institution)" and inst!=institution:
+            if scanMode == "All Collections (selected institution)" and inst != institution:
                 continue
+
             try:
-                meta=mappingDF[(mappingDF["institutionCode"]==inst)&(mappingDF["collectionCode"]==coll)].iloc[0]
+                meta = mappingDF[(mappingDF["institutionCode"] == inst) & (mappingDF["collectionCode"] == coll)].iloc[0]
             except IndexError:
                 continue
-            all_rows.extend(scan_collection(cat,inst,coll,meta))
 
-            # Generate subset CSV for this collection
-            subset_rows = [r for r in all_rows if r["collectionCode"]==coll and r["assetCategory"]==cat and r["format"] != ".csv"]
+            # Scan files and add rows
+            all_rows.extend(scan_collection(cat, inst, coll, meta))
+
+            # Generate subset CSV for this collection (only non-CSV files)
+            subset_rows = [
+                r for r in all_rows
+                if r["collectionCode"] == coll and r["assetCategory"] == cat and r["format"] != ".csv"
+            ]
             if subset_rows:
-                meta_folder=os.path.join(inst_path,coll,"metadata")
-                os.makedirs(meta_folder,exist_ok=True)
-                subset_path=os.path.join(meta_folder,f"{coll}_metadata_{RUN_TIMESTAMP}.csv")
-                pd.DataFrame(subset_rows).to_csv(subset_path,index=False)
+                meta_folder = os.path.join(inst_path, coll, "metadata")
+                os.makedirs(meta_folder, exist_ok=True)
+                subset_path = os.path.join(meta_folder, f"{coll}_metadata_{RUN_TIMESTAMP}.csv")
+                pd.DataFrame(subset_rows).to_csv(subset_path, index=False)
                 print(f"Collection metadata CSV generated: {subset_path}")
 
-                # Append metadata CSV info to all_rows with description from meta
-                all_rows.append({
+                # Append metadata CSV info to all_rows
+                row_data = {
                     "fileName": os.path.basename(subset_path),
                     "documentId": generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
                     "title": os.path.basename(subset_path),
@@ -377,7 +388,7 @@ for cat in categories:
                     "institutionName": INSTITUTION_CODE_MAP.get(inst, inst),
                     "creator": meta["creator"],
                     "contributor": meta["contributor"],
-                    "description": meta.get("description",""),  # <-- preserve description
+                    "description": meta.get("description", ""),  # preserve description
                     "rightsHolder": meta["rightsHolder"],
                     "holdingInstitution": meta["holdingInstitution"],
                     "license": meta["license"],
@@ -387,8 +398,15 @@ for cat in categories:
                     "fullPath": subset_path,
                     "relativePath": os.path.relpath(subset_path, rootFolder),
                     "assetCategory": f"{cat}_metadata",
-                    "scanModeApplied": scanMode
-                })
+                    "scanModeApplied": scanMode,
+                    "additionalNames": ""  # start empty
+                }
+
+                # Fill 'additionalNames' from mapping only if empty
+                if "additionalNames" in mappingDF.columns and not row_data["additionalNames"].strip():
+                    row_data["additionalNames"] = meta.get("additionalNames", "")
+
+                all_rows.append(row_data)
 
 # ==================================================
 # Convert new rows to DataFrame
