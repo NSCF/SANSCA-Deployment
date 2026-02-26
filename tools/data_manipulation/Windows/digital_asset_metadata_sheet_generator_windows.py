@@ -111,17 +111,14 @@ institutionVar = StringVar()
 collectionVar = StringVar()
 fileFilterVar = StringVar()
 outputChoiceVar = StringVar()
-#languageVar = StringVar()
 scanModeVar = StringVar()
 
 fileFilters = ["All","TIFF only","RAW only","JPEG only"]
 outputChoices = ["CSV only","Excel only","Both"]
-#languages = ["English","Afrikaans","Latin/Greek"]
 scanModes = ["Single Collection","All Collections (selected institution)","All Institutions + Collections"]
 
 fileFilterVar.set(fileFilters[0])
 outputChoiceVar.set(outputChoices[0])
-#languageVar.set(languages[0])
 scanModeVar.set(scanModes[0])
 
 mappingDF = None
@@ -241,8 +238,7 @@ collectionMenu.pack(fill="x", padx=20)
 
 Label(root,text="File Filter:").pack(pady=5)
 OptionMenu(root,fileFilterVar,*fileFilters).pack(fill="x", padx=20)
-#Label(root,text="Language:").pack(pady=5)
-#OptionMenu(root,languageVar,*languages).pack(fill="x", padx=20)
+
 Label(root,text="Output Choice:").pack(pady=5)
 OptionMenu(root,outputChoiceVar,*outputChoices).pack(fill="x", padx=20)
 
@@ -293,7 +289,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 parts = base.split("_")
                 view_code = parts[1] if len(parts) > 1 else ""
                 view_desc = VIEW_CODE_MAP.get(view_code.lower(), "")
-                description_text = view_desc if view_desc else collectionCode 
+                description_text = view_desc if view_desc else meta.get("description", collectionCode) 
 
                 if fmt == ".csv":
                     doc_id = generate_metadata_document_id(institutionCode,collectionCode, cat, rel)
@@ -310,7 +306,6 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "dateCreated": getDateCreated(full),
                     "format": fmt,
                     "subject": "Metadata" if fmt == ".csv" else meta.get("subject", ""),
-                    #"language": languageVar.get(),
                     "fileName": f,
                     "fullPath": full,
                     "relativePath": rel,
@@ -318,7 +313,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "scanModeApplied": scanMode
                 }
 
-# Add ALL mapping columns automatically
+                # Add ALL mapping columns automatically
                 for col in mappingDF.columns:
                     if col not in row_data:
                         row_data[col] = meta.get(col, "")
@@ -334,7 +329,6 @@ master_csv = os.path.join(rootFolder, "DAMSG_output", "digital_asset_inventory_m
 master_xlsx = os.path.join(rootFolder, "DAMSG_output", "digital_asset_inventory_master.xlsx")
 os.makedirs(os.path.dirname(master_csv), exist_ok=True)
 
-# Load existing master if present
 if os.path.isfile(master_csv):
     master_df = pd.read_csv(master_csv)
 else:
@@ -373,7 +367,7 @@ for cat in categories:
                 pd.DataFrame(subset_rows).to_csv(subset_path,index=False)
                 print(f"Collection metadata CSV generated: {subset_path}")
 
-                # Append metadata CSV info to all_rows
+                # Append metadata CSV info to all_rows with description from meta
                 all_rows.append({
                     "fileName": os.path.basename(subset_path),
                     "documentId": generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
@@ -383,14 +377,13 @@ for cat in categories:
                     "institutionName": INSTITUTION_CODE_MAP.get(inst, inst),
                     "creator": meta["creator"],
                     "contributor": meta["contributor"],
-                    "description": "",
+                    "description": meta.get("description",""),  # <-- preserve description
                     "rightsHolder": meta["rightsHolder"],
                     "holdingInstitution": meta["holdingInstitution"],
                     "license": meta["license"],
                     "dateCreated": datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
                     "format": ".csv",
                     "subject": "Metadata",
-                    #"language": languageVar.get(),
                     "fullPath": subset_path,
                     "relativePath": os.path.relpath(subset_path, rootFolder),
                     "assetCategory": f"{cat}_metadata",
@@ -400,70 +393,64 @@ for cat in categories:
 # ==================================================
 # Convert new rows to DataFrame
 # ==================================================
+
+# ==================================================
+# Convert new rows to DataFrame
+# ==================================================
 new_rows_df = pd.DataFrame(all_rows)
 
-# Only keep rows not already in master
-required_master_columns = {
-    "documentId",
-    "relativePath",
-    "collectionCode",
-    "institutionCode"
-}
+# -------------------------
+# Remove duplicates based on documentId
+# -------------------------
+if not master_df.empty:
+    new_rows_df = new_rows_df[~new_rows_df['documentId'].isin(master_df['documentId'])]
+
+# -------------------------
+# Preserve description for metadata CSV files
+# -------------------------
+mask = (new_rows_df["format"] == ".csv")
 
 if not master_df.empty:
-    missing_master_cols = required_master_columns - set(master_df.columns)
-    if missing_master_cols:
-        print("WARNING: Master file is malformed. Rebuilding master.")
-        master_df = pd.DataFrame()
+    existing_desc = master_df.set_index("documentId")["description"].to_dict()
+    def preserve_or_generate_desc(row):
+        doc_id = row["documentId"]
+        if doc_id in existing_desc and existing_desc[doc_id].strip():
+            return existing_desc[doc_id]  # Keep existing description
+        # Generate description only if none exists in master
+        mode = row.get("scanModeApplied","")
+        if mode=="Single Collection":
+            return f"Metadata file for {row['institutionCode']}_{row['collectionCode']}"
+        elif mode=="All Collections (selected institution)":
+            return f"Metadata file for {row['institutionCode']}"
+        else:
+            return "Metadata file for all collections"
+
+    new_rows_df.loc[mask,"description"] = new_rows_df.loc[mask].apply(preserve_or_generate_desc, axis=1)
+else:
+    # First run: generate description normally
+    def generate_desc(row):
+        mode = row.get("scanModeApplied","")
+        if mode=="Single Collection":
+            return f"Metadata file for {row['institutionCode']}_{row['collectionCode']}"
+        elif mode=="All Collections (selected institution)":
+            return f"Metadata file for {row['institutionCode']}"
+        else:
+            return "Metadata file for all collections"
+    new_rows_df.loc[mask,"description"] = new_rows_df.loc[mask].apply(generate_desc, axis=1)
 
 # ==================================================
 # Append new rows to master
 # ==================================================
 updated_master_df = pd.concat([master_df, new_rows_df], ignore_index=True)
 
-# Preserve mapping column order
-mapping_columns = list(mappingDF.columns)
+# Preserve column order
+mapping_columns = [col for col in mappingDF.columns if col in updated_master_df.columns]
+system_columns = [col for col in [
+    "documentId","title","fileName","relativePath","fullPath",
+    "format","assetCategory","dateCreated","scanModeApplied"] if col in updated_master_df.columns]
 
-# Ensure system columns appear first (if desired)
-system_columns = [
-    "documentId",
-    "title",
-    "fileName",
-    "relativePath",
-    "fullPath",
-    "format",
-    "assetCategory",
-    "dateCreated",
-    "scanModeApplied"
-]
-
-# Only keep columns that actually exist
-system_columns = [col for col in system_columns if col in updated_master_df.columns]
-mapping_columns = [col for col in mapping_columns if col in updated_master_df.columns]
-
-# Combine while avoiding duplicates
-ordered_columns = system_columns + [
-    col for col in mapping_columns if col not in system_columns
-]
-
-# Apply ordering
+ordered_columns = system_columns + [col for col in mapping_columns if col not in system_columns]
 updated_master_df = updated_master_df[ordered_columns]
-
-# ==================================================
-# Apply description only to newly added metadata rows
-# ==================================================
-def apply_description(row):
-    if row["format"] == ".csv" and (row["description"] == "" or pd.isna(row["description"])):
-        mode = row.get("scanModeApplied", "")
-        if mode == "Single Collection":
-            return f"Metadata file for {row['collectionCode']}"
-        elif mode == "All Collections (selected institution)":
-            return f"Metadata file for {row['institutionCode']}"
-        else:
-            return "Metadata file for all collections"
-    return row["description"]
-
-updated_master_df["description"] = updated_master_df.apply(apply_description, axis=1)
 
 # ==================================================
 # Write master CSV/Excel
@@ -475,28 +462,19 @@ print(f"Processing complete. Master inventory updated: {master_csv}")
 # ==================================================
 # Optionally, open files automatically
 # ==================================================
-
 def open_file(filepath):
-    """
-    Open any file in its default application depending on OS.
-    - CSV → Excel (or default CSV app)
-    - CSS → default code editor
-    - Excel → Excel
-    Works on Windows, macOS, Linux
-    """
     system = platform.system()
-
     try:
-        if system == "Windows":
+        if system=="Windows":
             os.startfile(filepath)
-        elif system == "Darwin":
-            subprocess.run(["open", filepath], check=True)
-        else:  # Linux
-            subprocess.run(["xdg-open", filepath], check=True)
+        elif system=="Darwin":
+            subprocess.run(["open",filepath],check=True)
+        else:
+            subprocess.run(["xdg-open",filepath],check=True)
     except Exception as e:
         print(f"Could not open {filepath}: {e}")
 
-if outputChoiceVar.get() in ("Both", "CSV only"):
+if outputChoiceVar.get() in ("Both","CSV only"):
     open_file(master_csv)
-if outputChoiceVar.get() in ("Both", "Excel only"):
+if outputChoiceVar.get() in ("Both","Excel only"):
     open_file(master_xlsx)
