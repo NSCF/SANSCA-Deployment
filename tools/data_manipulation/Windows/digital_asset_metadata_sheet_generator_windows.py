@@ -153,7 +153,7 @@ def selectRootFolder():
     rootLabel.config(text=p)
 
     global mappingDF
-    mapping_path = os.path.join(p, "DAMSG_mapping", "collections_mapping_2026.csv")
+    mapping_path = os.path.join(p, "DAMSG_mapping", "damsg_tool_collection_mapping_master_2026.csv")
     if not os.path.isfile(mapping_path):
         messagebox.showerror("Mapping CSV Error",
                              f"Mapping file not found at:\n{mapping_path}")
