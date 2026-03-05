@@ -54,6 +54,24 @@ VIEW_CODE_MAP = {
 }
 
 # ==================================================
+# Checksum generation for file integrity (optional)
+# =
+import hashlib
+
+def generate_checksum(file_path, block_size=65536):
+    sha256 = hashlib.sha256()
+
+    try:
+        with open(file_path, "rb") as f:
+            for block in iter(lambda: f.read(block_size), b""):
+                sha256.update(block)
+
+        return sha256.hexdigest()
+
+    except Exception:
+        return ""
+
+# ==================================================
 # Hybrid date extraction
 # ==================================================
 def getDateCreated(path):
@@ -303,6 +321,8 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
     for r, _, files in os.walk(collectionRoot):
         for f in files:
             
+            checksum = generate_checksum(full_path)
+
             # Skip hidden/system files
             if f.startswith(".") or f.startswith("._") or f.lower() in SYSTEM_FILES:
                 continue
@@ -343,7 +363,8 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "fullPath": full,
                     "relativePath": rel,
                     "assetCategory": asset_category,
-                    "scanModeApplied": scanMode
+                    "scanModeApplied": scanMode,
+                    "checksumSHA256": checksum
                 }
 
                 # Add ALL mapping columns automatically
@@ -396,21 +417,36 @@ for cat in categories:
 
             subset_rows = [
                 r for r in all_rows
-                if r["collectionCode"] == coll and r["assetCategory"] == cat and r["format"] != ".csv"
+                    if (
+                        r["collectionCode"] == coll and
+                        r["assetCategory"] == cat and
+                        r["format"] != ".csv" and
+                        r["scanType"] == scanType
+                    )
             ]
             if subset_rows:
                 meta_folder = os.path.join(inst_path, coll, "metadata")
                 os.makedirs(meta_folder, exist_ok=True)
-                subset_path = os.path.join(meta_folder, f"{coll}_metadata_{RUN_TIMESTAMP}.csv")
                 
+                subset_path = os.path.join(meta_folder, f"{coll}_metadata_{RUN_TIMESTAMP}.csv")
+
                 subset_df = pd.DataFrame(subset_rows)
 
                 with open(subset_path, "w", newline="", encoding="utf-8") as f:
+                    
+                    scanDateHuman = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                    # Write scan metadata header
                     f.write(f"scanType,{scanType}\n")
                     f.write(f"scanMode,{scanMode}\n")
-                    f.write(f"scanTimestamp,{RUN_TIMESTAMP}\n\n")
+                    f.write(f"scanTimestamp,{RUN_TIMESTAMP}\n")
+                    f.write(f"scanDate,{scanDateHuman}\n")
+                    f.write(f"institutionCode,{inst}\n")
+                    f.write(f"collectionCode,{coll}\n\n")
+
+                    # Write table data
                     subset_df.to_csv(f, index=False)
-                
+
                 print(f"Collection metadata CSV generated: {subset_path}")
 
                 row_data = {
@@ -452,7 +488,7 @@ expected_columns = [
     "format","assetCategory","dateCreated","scanModeApplied",
     "institutionCode","collectionCode","institutionName",
     "description","additionalNames","creator","contributor",
-    "license","rightsHolder","holdingInstitution","subject"
+    "license","rightsHolder","holdingInstitution","subject","checksumSHA256"
 ]
 
 # Create new rows dataframe
