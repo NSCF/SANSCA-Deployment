@@ -116,7 +116,7 @@ outputChoiceVar = StringVar()
 scanModeVar = StringVar()
 scanTypeVar = StringVar()
 
-fileFilters = ["All","TIFF only","RAW only","JPEG only"]
+fileFilters = ["All","TIFF only","RAW only","JPEG only", "PDF only"]
 outputChoices = ["CSV only","Excel only","Both"]
 scanModes = ["Single Collection","All Collections (selected institution)","All Institutions + Collections"]
 scanTypes = [
@@ -274,10 +274,11 @@ scanType = scanTypeVar.get()
 # File scanning logic
 # ==================================================
 fileTypes = {
-    "All":[ ".tif",".tiff",".jpg",".jpeg",".nef",".cr2",".cr3",".arw",".dng",".orf",".rw2",".csv"],
+    "All":[ ".tif",".tiff",".jpg",".jpeg",".nef",".cr2",".cr3",".arw",".dng",".orf",".rw2", ".pdf",".csv"],
     "TIFF only":[ ".tif",".tiff"],
     "RAW only":[ ".nef",".cr2",".cr3",".arw",".dng",".orf",".rw2"],
-    "JPEG only":[ ".jpg",".jpeg"]
+    "JPEG only":[ ".jpg",".jpeg"],
+    "PDF only":[ ".pdf"]
 }
 extensions = tuple(fileTypes[fileFilterVar.get()])
 all_rows = []
