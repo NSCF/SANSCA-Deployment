@@ -14,6 +14,11 @@ import pathlib
 import hashlib
 
 # ==================================================
+# System files to ignore during scanning
+# ==================================================
+SYSTEM_FILES = ("thumbs.db","desktop.ini",".ds_store")
+
+# ==================================================
 # Run timestamp
 # ==================================================
 RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -291,6 +296,11 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
     rows = []
     for r, _, files in os.walk(collectionRoot):
         for f in files:
+            
+            # Skip hidden/system files
+            if f.startswith(".") or f.startswith("._") or f.lower() in SYSTEM_FILES:
+                continue
+           
             if f.lower().endswith(extensions):
                 full = os.path.join(r, f)
                 rel = os.path.relpath(full, rootFolder)
