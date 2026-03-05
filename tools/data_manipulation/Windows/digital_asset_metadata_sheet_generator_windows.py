@@ -601,7 +601,7 @@ updated_master_df = updated_master_df[ordered_columns]
 # ==================================================
 if "checksumSHA256" not in updated_master_df.columns:
     updated_master_df["checksumSHA256"] = ""
-    
+
 # ==================================================
 # Preservation Audit Report
 # ==================================================
@@ -741,5 +741,8 @@ if outputChoiceVar.get() in ("Both","CSV only"):
     open_file(master_csv)
 if outputChoiceVar.get() in ("Both","Excel only"):
     open_file(master_xlsx)
+
+# Run preservation audit
+run_preservation_audit(updated_master_df)    
 
 open_file(audit_path)    
