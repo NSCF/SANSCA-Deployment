@@ -114,14 +114,22 @@ collectionVar = StringVar()
 fileFilterVar = StringVar()
 outputChoiceVar = StringVar()
 scanModeVar = StringVar()
+scanTypeVar = StringVar()
 
 fileFilters = ["All","TIFF only","RAW only","JPEG only"]
 outputChoices = ["CSV only","Excel only","Both"]
 scanModes = ["Single Collection","All Collections (selected institution)","All Institutions + Collections"]
-
+scanTypes = [
+    "Working Drive",
+    "Mirror Drive",
+    "Mirror RAID a.k.a Suzie",
+    "Collection Copy",
+    "NAS Storage Repository"
+] 
 fileFilterVar.set(fileFilters[0])
 outputChoiceVar.set(outputChoices[0])
 scanModeVar.set(scanModes[0])
+scanTypeVar.set(scanTypes[0])
 
 mappingDF = None
 
@@ -153,7 +161,7 @@ def selectRootFolder():
     rootLabel.config(text=p)
 
     global mappingDF
-    mapping_path = os.path.join(p, "DAMSG_mapping", "damsg_tool_collection_mapping_master_2026.csv")
+    mapping_path = os.path.join(p, "DAMSG_mapping", "collections_mapping_2026.csv")
     if not os.path.isfile(mapping_path):
         messagebox.showerror("Mapping CSV Error",
                              f"Mapping file not found at:\n{mapping_path}")
@@ -228,6 +236,9 @@ Button(root,text="Select SANSCA Root Folder",command=selectRootFolder,bg="lightg
 rootLabel=Label(root,text="",wraplength=800,anchor="w")
 rootLabel.pack()
 
+Label(root,text="Scan Type:").pack(pady=5)
+OptionMenu(root,scanTypeVar,*scanTypes).pack(fill="x", padx=20)
+
 Label(root,text="Scan Mode:").pack(pady=5)
 OptionMenu(root,scanModeVar,*scanModes).pack(fill="x", padx=20)
 
@@ -257,6 +268,7 @@ rootFolder = rootFolderVar.get()
 institution = institutionVar.get()
 collection = collectionVar.get()
 scanMode = scanModeVar.get()
+scanType = scanTypeVar.get()
 
 # ==================================================
 # File scanning logic
@@ -299,6 +311,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     doc_id = generate_document_id(institutionCode, collectionCode, base, rel)
 
                 row_data = {
+                    "scanType": scanType,
                     "documentId": doc_id,
                     "title": base,
                     "institutionCode": institutionCode,
@@ -377,6 +390,7 @@ for cat in categories:
 
                 row_data = {
                     "fileName": os.path.basename(subset_path),
+                    "scanType": scanType,
                     "documentId": generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
                     "title": os.path.basename(subset_path),
                     "institutionCode": inst,
@@ -409,7 +423,7 @@ for cat in categories:
 # ==================================================
 
 expected_columns = [
-    "documentId","title","fileName","relativePath","fullPath",
+    "scanType","documentId","title","fileName","relativePath","fullPath",
     "format","assetCategory","dateCreated","scanModeApplied",
     "institutionCode","collectionCode","institutionName",
     "description","additionalNames","creator","contributor",
@@ -497,7 +511,7 @@ updated_master_df = pd.concat([master_df, new_rows_df], ignore_index=True)
 # Preserve column order
 mapping_columns = [col for col in mappingDF.columns if col in updated_master_df.columns]
 system_columns = [col for col in [
-    "documentId","title","fileName","relativePath","fullPath",
+    "scanType","documentId","title","fileName","relativePath","fullPath",
     "format","assetCategory","dateCreated","scanModeApplied"] if col in updated_master_df.columns]
 
 ordered_columns = system_columns + [col for col in mapping_columns if col not in system_columns]
