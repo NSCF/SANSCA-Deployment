@@ -604,7 +604,7 @@ if "checksumSHA256" not in updated_master_df.columns:
     updated_master_df["checksumSHA256"] = ""
 
 # ==================================================
-# Preservation Audit Report
+# Preservation Audit Report (Revised)
 # ==================================================
 from collections import Counter
 
@@ -615,95 +615,91 @@ def run_preservation_audit(master_df):
 
     audit_file = os.path.join(audit_folder, f"preservation_audit_{RUN_TIMESTAMP}.xlsx")
 
-    # Only evaluate real files
+    # Only evaluate real files (skip .csv metadata)
     df = master_df[master_df["format"] != ".csv"].copy()
 
-    # Storage layers present
-    scan_types = df["scanType"].dropna().unique()
+    # Define only logical source→target storage comparisons
+    allowed_pairs = [
+        ("Working Drive", "Mirror Drive"),
+        ("Mirror Drive", "Mirror RAID a.k.a Suzie"),
+        ("Working Drive", "Collection Copy"),
+        ("Mirror RAID a.k.a Suzie", "NAS Storage Repository")
+    ]
 
     summary_rows = []
     missing_rows = []
     mismatch_rows = []
     duplicate_rows = []
 
-    for source in scan_types:
-        for target in scan_types:
+    for source, target in allowed_pairs:
 
-            if source == target:
-                continue
+        source_df = df[df["scanType"] == source]
+        target_df = df[df["scanType"] == target]
 
-            source_df = df[df["scanType"] == source]
-            target_df = df[df["scanType"] == target]
+        source_index = dict(zip(source_df["relativePath"], source_df["checksumSHA256"]))
+        target_index = dict(zip(target_df["relativePath"], target_df["checksumSHA256"]))
 
-            source_index = dict(zip(source_df["relativePath"], source_df["checksumSHA256"]))
-            target_index = dict(zip(target_df["relativePath"], target_df["checksumSHA256"]))
+        missing = []
+        mismatch = []
+        matching = []
 
-            missing = []
-            mismatch = []
-            matching = []
+        for path, checksum in source_index.items():
+            if path not in target_index:
+                missing.append(path)
+            elif target_index[path] != checksum:
+                mismatch.append(path)
+            else:
+                matching.append(path)
 
-            for path, checksum in source_index.items():
+        summary_rows.append({
+            "Source Storage": source,
+            "Target Storage": target,
+            "Total Source Files": len(source_index),
+            "Matching": len(matching),
+            "Missing on Target": len(missing),
+            "Checksum Mismatch": len(mismatch)
+        })
 
-                if path not in target_index:
-                    missing.append(path)
-
-                elif target_index[path] != checksum:
-                    mismatch.append(path)
-
-                else:
-                    matching.append(path)
-
-            summary_rows.append({
+        for p in missing:
+            missing_rows.append({
                 "Source Storage": source,
-                "Target Storage": target,
-                "Total Source Files": len(source_index),
-                "Matching": len(matching),
-                "Missing on Target": len(missing),
-                "Checksum Mismatch": len(mismatch)
+                "Missing From": target,
+                "relativePath": p
             })
 
-            for p in missing:
-                missing_rows.append({
-                    "Source Storage": source,
-                    "Missing From": target,
-                    "relativePath": p
-                })
+        for p in mismatch:
+            mismatch_rows.append({
+                "Source Storage": source,
+                "Mismatch With": target,
+                "relativePath": p
+            })
 
-            for p in mismatch:
-                mismatch_rows.append({
-                    "Source Storage": source,
-                    "Mismatch With": target,
-                    "relativePath": p
-                })
-
-    # Duplicate detection
+    # Detect duplicates across all files
     checksum_counts = Counter(df["checksumSHA256"])
-    duplicate_checksums = [k for k,v in checksum_counts.items() if v > 1]
+    duplicate_checksums = [k for k, v in checksum_counts.items() if v > 1]
 
     for chk in duplicate_checksums:
         dup_files = df[df["checksumSHA256"] == chk]
-        for _,row in dup_files.iterrows():
+        for _, row in dup_files.iterrows():
             duplicate_rows.append({
                 "checksum": chk,
                 "relativePath": row["relativePath"],
                 "scanType": row["scanType"]
             })
 
+    # Create DataFrames
     summary_df = pd.DataFrame(summary_rows)
     missing_df = pd.DataFrame(missing_rows)
     mismatch_df = pd.DataFrame(mismatch_rows)
     duplicates_df = pd.DataFrame(duplicate_rows)
 
+    # Write Excel
     with pd.ExcelWriter(audit_file, engine="openpyxl") as writer:
-
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
-
         if not missing_df.empty:
             missing_df.to_excel(writer, sheet_name="Missing Files", index=False)
-
         if not mismatch_df.empty:
             mismatch_df.to_excel(writer, sheet_name="Checksum Mismatch", index=False)
-
         if not duplicates_df.empty:
             duplicates_df.to_excel(writer, sheet_name="Duplicates", index=False)
 
