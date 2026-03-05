@@ -38,6 +38,14 @@ INSTITUTION_CODE_MAP = {
 }
 
 # ==================================================
+# Excluded Root Folders
+# ==================================================
+EXCLUDED_ROOT_FOLDERS = (
+    "DAMSG_output",
+    "DAMSG_mapping"
+)
+
+# ==================================================
 # View code map
 # ==================================================
 VIEW_CODE_MAP = {
@@ -319,9 +327,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
 
     rows = []
     for r, _, files in os.walk(collectionRoot):
-        for f in files:
-            
-            checksum = generate_checksum(full_path)
+        for f in files: 
 
             # Skip hidden/system files
             if f.startswith(".") or f.startswith("._") or f.lower() in SYSTEM_FILES:
@@ -332,6 +338,8 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 rel = os.path.relpath(full, rootFolder)
                 base = os.path.splitext(f)[0]
                 fmt = os.path.splitext(f)[1].lower()
+
+                checksum = generate_checksum(full)
 
                 asset_category = categoryRoot
                 if os.path.sep + "metadata" + os.path.sep in full:
@@ -391,7 +399,11 @@ else:
 # ==================================================
 # Scan, generate subset CSVs, and append newest metadata
 # ==================================================
-categories = [d for d in os.listdir(rootFolder) if os.path.isdir(os.path.join(rootFolder, d))]
+categories = [
+    d for d in os.listdir(rootFolder)
+    if os.path.isdir(os.path.join(rootFolder, d))
+    and d not in EXCLUDED_ROOT_FOLDERS
+]
 
 for cat in categories:
     cat_path = os.path.join(rootFolder, cat)
@@ -491,6 +503,10 @@ expected_columns = [
     "license","rightsHolder","holdingInstitution","subject","checksumSHA256"
 ]
 
+for col in expected_columns:
+    if col not in master_df.columns:
+        master_df[col] = ""
+
 # Create new rows dataframe
 if all_rows:
     new_rows_df = pd.DataFrame(all_rows)
@@ -511,8 +527,10 @@ if "documentId" not in master_df.columns:
 # Remove duplicates safely
 if not new_rows_df.empty:
     new_rows_df = new_rows_df[
-        ~new_rows_df["documentId"].isin(master_df["documentId"])
-    ]
+    ~new_rows_df.set_index(["documentId","scanType"]).index.isin(
+        master_df.set_index(["documentId","scanType"]).index
+    )
+]
 
 # Preserve description for CSV metadata safely
 required_cols = {"format", "description", "documentId", "institutionCode", "collectionCode"}
@@ -579,11 +597,130 @@ ordered_columns = system_columns + [col for col in mapping_columns if col not in
 updated_master_df = updated_master_df[ordered_columns]
 
 # ==================================================
+# Ensure checksum column exists before preservation audit
+# ==================================================
+if "checksumSHA256" not in updated_master_df.columns:
+    updated_master_df["checksumSHA256"] = ""
+    
+# ==================================================
+# Preservation Audit Report
+# ==================================================
+from collections import Counter
+
+def run_preservation_audit(master_df):
+
+    audit_folder = os.path.join(rootFolder, "DAMSG_output")
+    os.makedirs(audit_folder, exist_ok=True)
+
+    audit_file = os.path.join(audit_folder, f"preservation_audit_{RUN_TIMESTAMP}.xlsx")
+
+    # Only evaluate real files
+    df = master_df[master_df["format"] != ".csv"].copy()
+
+    # Storage layers present
+    scan_types = df["scanType"].dropna().unique()
+
+    summary_rows = []
+    missing_rows = []
+    mismatch_rows = []
+    duplicate_rows = []
+
+    for source in scan_types:
+        for target in scan_types:
+
+            if source == target:
+                continue
+
+            source_df = df[df["scanType"] == source]
+            target_df = df[df["scanType"] == target]
+
+            source_index = dict(zip(source_df["relativePath"], source_df["checksumSHA256"]))
+            target_index = dict(zip(target_df["relativePath"], target_df["checksumSHA256"]))
+
+            missing = []
+            mismatch = []
+            matching = []
+
+            for path, checksum in source_index.items():
+
+                if path not in target_index:
+                    missing.append(path)
+
+                elif target_index[path] != checksum:
+                    mismatch.append(path)
+
+                else:
+                    matching.append(path)
+
+            summary_rows.append({
+                "Source Storage": source,
+                "Target Storage": target,
+                "Total Source Files": len(source_index),
+                "Matching": len(matching),
+                "Missing on Target": len(missing),
+                "Checksum Mismatch": len(mismatch)
+            })
+
+            for p in missing:
+                missing_rows.append({
+                    "Source Storage": source,
+                    "Missing From": target,
+                    "relativePath": p
+                })
+
+            for p in mismatch:
+                mismatch_rows.append({
+                    "Source Storage": source,
+                    "Mismatch With": target,
+                    "relativePath": p
+                })
+
+    # Duplicate detection
+    checksum_counts = Counter(df["checksumSHA256"])
+    duplicate_checksums = [k for k,v in checksum_counts.items() if v > 1]
+
+    for chk in duplicate_checksums:
+        dup_files = df[df["checksumSHA256"] == chk]
+        for _,row in dup_files.iterrows():
+            duplicate_rows.append({
+                "checksum": chk,
+                "relativePath": row["relativePath"],
+                "scanType": row["scanType"]
+            })
+
+    summary_df = pd.DataFrame(summary_rows)
+    missing_df = pd.DataFrame(missing_rows)
+    mismatch_df = pd.DataFrame(mismatch_rows)
+    duplicates_df = pd.DataFrame(duplicate_rows)
+
+    with pd.ExcelWriter(audit_file, engine="openpyxl") as writer:
+
+        summary_df.to_excel(writer, sheet_name="Summary", index=False)
+
+        if not missing_df.empty:
+            missing_df.to_excel(writer, sheet_name="Missing Files", index=False)
+
+        if not mismatch_df.empty:
+            mismatch_df.to_excel(writer, sheet_name="Checksum Mismatch", index=False)
+
+        if not duplicates_df.empty:
+            duplicates_df.to_excel(writer, sheet_name="Duplicates", index=False)
+
+    print(f"Preservation audit report created: {audit_file}")
+
+    return audit_file
+
+# ==================================================
 # Write master CSV/Excel
 # ==================================================
 updated_master_df.to_csv(master_csv, index=False)
 updated_master_df.to_excel(master_xlsx, index=False)
 print(f"Processing complete. Master inventory updated: {master_csv}")
+
+# ==================================================
+# Run preservation audit
+# ==================================================
+audit_path = run_preservation_audit(updated_master_df)
 
 # ==================================================
 # Optionally, open files automatically
@@ -604,3 +741,5 @@ if outputChoiceVar.get() in ("Both","CSV only"):
     open_file(master_csv)
 if outputChoiceVar.get() in ("Both","Excel only"):
     open_file(master_xlsx)
+
+open_file(audit_path)    
