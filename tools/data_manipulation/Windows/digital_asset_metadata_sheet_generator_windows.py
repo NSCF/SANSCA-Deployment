@@ -591,7 +591,8 @@ updated_master_df = pd.concat([master_df, new_rows_df], ignore_index=True)
 mapping_columns = [col for col in mappingDF.columns if col in updated_master_df.columns]
 system_columns = [col for col in [
     "scanType","documentId","title","fileName","relativePath","fullPath",
-    "format","assetCategory","dateCreated","scanModeApplied"] if col in updated_master_df.columns]
+    "format","assetCategory","dateCreated","scanModeApplied","checksumSHA256"
+] if col in updated_master_df.columns]
 
 ordered_columns = system_columns + [col for col in mapping_columns if col not in system_columns]
 updated_master_df = updated_master_df[ordered_columns]
