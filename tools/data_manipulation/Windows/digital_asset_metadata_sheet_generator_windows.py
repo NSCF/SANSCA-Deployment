@@ -16,7 +16,13 @@ import hashlib
 # ==================================================
 # System files to ignore during scanning
 # ==================================================
-SYSTEM_FILES = ("thumbs.db","desktop.ini",".ds_store")
+SYSTEM_FILES = (
+    "thumbs.db",
+    "desktop.ini",
+    ".ds_store",
+    ".spotlight-v100",
+    ".trashes"
+)
 
 # ==================================================
 # Run timestamp
@@ -396,7 +402,15 @@ for cat in categories:
                 meta_folder = os.path.join(inst_path, coll, "metadata")
                 os.makedirs(meta_folder, exist_ok=True)
                 subset_path = os.path.join(meta_folder, f"{coll}_metadata_{RUN_TIMESTAMP}.csv")
-                pd.DataFrame(subset_rows).to_csv(subset_path, index=False)
+                
+                subset_df = pd.DataFrame(subset_rows)
+
+                with open(subset_path, "w", newline="", encoding="utf-8") as f:
+                    f.write(f"scanType,{scanType}\n")
+                    f.write(f"scanMode,{scanMode}\n")
+                    f.write(f"scanTimestamp,{RUN_TIMESTAMP}\n\n")
+                    subset_df.to_csv(f, index=False)
+                
                 print(f"Collection metadata CSV generated: {subset_path}")
 
                 row_data = {
