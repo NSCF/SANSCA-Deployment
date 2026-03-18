@@ -46,6 +46,47 @@ EXCLUDED_ROOT_FOLDERS = (
 )
 
 # ==================================================
+# DwC Simple Multimedia Extension — MIME type map
+# ==================================================
+MIME_TYPE_MAP = {
+    ".tif":  "image/tiff",
+    ".tiff": "image/tiff",
+    ".jpg":  "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png":  "image/png",
+    ".pdf":  "application/pdf",
+    ".csv":  "text/csv",
+    ".nef":  "image/x-nikon-nef",
+    ".cr2":  "image/x-canon-cr2",
+    ".cr3":  "image/x-canon-cr3",
+    ".arw":  "image/x-sony-arw",
+    ".dng":  "image/x-adobe-dng",
+    ".orf":  "image/x-olympus-orf",
+    ".rw2":  "image/x-panasonic-rw2",
+}
+
+# ==================================================
+# DwC Simple Multimedia Extension — type map
+# Maps file extension to dc:type controlled vocabulary
+# ==================================================
+DWC_TYPE_MAP = {
+    ".tif":  "StillImage",
+    ".tiff": "StillImage",
+    ".jpg":  "StillImage",
+    ".jpeg": "StillImage",
+    ".png":  "StillImage",
+    ".nef":  "StillImage",
+    ".cr2":  "StillImage",
+    ".cr3":  "StillImage",
+    ".arw":  "StillImage",
+    ".dng":  "StillImage",
+    ".orf":  "StillImage",
+    ".rw2":  "StillImage",
+    ".pdf":  "Text",
+    ".csv":  "Text",
+}
+
+# ==================================================
 # View code map
 # ==================================================
 VIEW_CODE_MAP = {
@@ -348,31 +389,48 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 parts = base.split("_")
                 view_code = parts[1] if len(parts) > 1 else ""
                 view_desc = VIEW_CODE_MAP.get(view_code.lower(), "")
-                description_text = view_desc if view_desc else meta.get("description", collectionCode) 
+                description_text = view_desc if view_desc else meta.get("description", collectionCode)
 
                 if fmt == ".csv":
-                    doc_id = generate_metadata_document_id(institutionCode,collectionCode, categoryRoot, rel)
+                    doc_id = generate_metadata_document_id(institutionCode, collectionCode, categoryRoot, rel)
                 else:
                     doc_id = generate_document_id(institutionCode, collectionCode, base, rel)
 
+                mime_type = MIME_TYPE_MAP.get(fmt, "application/octet-stream")
+                dwc_type  = DWC_TYPE_MAP.get(fmt, "")
+
                 row_data = {
-                    "scanType": scanType,
-                    "documentId": doc_id,
-                    "title": base,
+                    # --- DwC Simple Multimedia Extension standard fields ---
+                    "identifier":    "",  # placeholder — URI to be assigned when image service is live
+                    "type":          dwc_type,
+                    "format":        mime_type,
+                    "title":         base,
+                    "description":   description_text,
+                    "created":       getDateCreated(full),
+                    "creator":       meta.get("creator", ""),
+                    "contributor":   meta.get("contributor", ""),
+                    "publisher":     meta.get("publisher", ""),
+                    "audience":      meta.get("audience", ""),
+                    "source":        meta.get("source", ""),
+                    "license":       meta.get("license", ""),
+                    "rightsHolder":  meta.get("rightsHolder", ""),
+                    "references":    "",  # placeholder — URI to occurrence record, future field
+                    # --- System / archival fields ---
+                    "scanType":        scanType,
+                    "documentId":      doc_id,
                     "institutionCode": institutionCode,
-                    "collectionCode": collectionCode,
+                    "collectionCode":  collectionCode,
                     "institutionName": INSTITUTION_CODE_MAP.get(institutionCode, institutionCode),
-                    "description": description_text,
-                    "dateCreated": getDateCreated(full),
-                    "format": fmt,
-                    "additionalNames": "",  # start empty
-                    "subject": "Metadata" if fmt == ".csv" else meta.get("subject", ""),
-                    "fileName": f,
-                    "fullPath": full,
-                    "relativePath": rel,
-                    "assetCategory": asset_category,
+                    "additionalNames": "",
+                    "subject":         "Metadata" if fmt == ".csv" else meta.get("subject", ""),
+                    "fileName":        f,
+                    "fullPath":        full,
+                    "relativePath":    rel,
+                    "assetCategory":   asset_category,
                     "scanModeApplied": scanMode,
-                    "checksumSHA256": checksum
+                    "checksumSHA256":  checksum,
+                    # preserved for legacy/archival use
+                    "dateCreated":     getDateCreated(full),
                 }
 
                 # Add ALL mapping columns automatically
@@ -432,7 +490,7 @@ for cat in categories:
                     if (
                         r["collectionCode"] == coll and
                         r["assetCategory"] == cat and
-                        r["format"] != ".csv" and
+                        r["format"] != "text/csv" and
                         r["scanType"] == scanType
                     )
             ]
@@ -461,28 +519,39 @@ for cat in categories:
 
                 print(f"Collection metadata CSV generated: {subset_path}")
 
+                now_ts = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
                 row_data = {
-                    "fileName": os.path.basename(subset_path),
-                    "scanType": scanType,
-                    "documentId": generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
-                    "title": os.path.basename(subset_path),
-                    "institutionCode": inst,
-                    "collectionCode": coll,
-                    "institutionName": INSTITUTION_CODE_MAP.get(inst, inst),
-                    "creator": meta["creator"],
-                    "contributor": meta["contributor"],
-                    "description": meta.get("description", ""),
-                    "rightsHolder": meta["rightsHolder"],
-                    "holdingInstitution": meta["holdingInstitution"],
-                    "license": meta["license"],
-                    "dateCreated": datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
-                    "format": ".csv",
-                    "subject": "Metadata",
-                    "fullPath": subset_path,
-                    "relativePath": os.path.relpath(subset_path, rootFolder),
-                    "assetCategory": f"{cat}_metadata",
-                    "scanModeApplied": scanMode,
-                    "additionalNames": ""
+                    # DwC Simple Multimedia Extension standard fields
+                    "identifier":    "",
+                    "type":          "Text",
+                    "format":        "text/csv",
+                    "title":         os.path.basename(subset_path),
+                    "description":   meta.get("description", ""),
+                    "created":       now_ts,
+                    "creator":       meta.get("creator", ""),
+                    "contributor":   meta.get("contributor", ""),
+                    "publisher":     meta.get("publisher", ""),
+                    "audience":      meta.get("audience", ""),
+                    "source":        meta.get("source", ""),
+                    "license":       meta.get("license", ""),
+                    "rightsHolder":  meta.get("rightsHolder", ""),
+                    "references":    "",
+                    # System / archival fields
+                    "fileName":          os.path.basename(subset_path),
+                    "scanType":          scanType,
+                    "documentId":        generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
+                    "institutionCode":   inst,
+                    "collectionCode":    coll,
+                    "institutionName":   INSTITUTION_CODE_MAP.get(inst, inst),
+                    "holdingInstitution": meta.get("holdingInstitution", ""),
+                    "dateCreated":       now_ts,
+                    "subject":           "Metadata",
+                    "fullPath":          subset_path,
+                    "relativePath":      os.path.relpath(subset_path, rootFolder),
+                    "assetCategory":     f"{cat}_metadata",
+                    "scanModeApplied":   scanMode,
+                    "additionalNames":   "",
+                    "checksumSHA256":    generate_checksum(subset_path),
                 }
 
                 if "additionalNames" in mappingDF.columns and not row_data["additionalNames"].strip():
@@ -496,11 +565,15 @@ for cat in categories:
 # ==================================================
 
 expected_columns = [
-    "scanType","documentId","title","fileName","relativePath","fullPath",
-    "format","assetCategory","dateCreated","scanModeApplied",
-    "institutionCode","collectionCode","institutionName",
-    "description","additionalNames","creator","contributor",
-    "license","rightsHolder","holdingInstitution","subject","checksumSHA256"
+    # DwC Simple Multimedia Extension standard fields (always present)
+    "identifier", "type", "format", "title", "description",
+    "created", "creator", "contributor", "publisher",
+    "audience", "source", "license", "rightsHolder", "references",
+    # System / archival fields
+    "scanType", "documentId", "fileName", "relativePath", "fullPath",
+    "assetCategory", "dateCreated", "scanModeApplied",
+    "institutionCode", "collectionCode", "institutionName",
+    "additionalNames", "holdingInstitution", "subject", "checksumSHA256",
 ]
 
 for col in expected_columns:
@@ -535,7 +608,7 @@ if not new_rows_df.empty:
 # Preserve description for CSV metadata safely
 required_cols = {"format", "description", "documentId", "institutionCode", "collectionCode"}
 if not new_rows_df.empty and required_cols.issubset(new_rows_df.columns):
-    mask_csv = new_rows_df["format"] == ".csv"
+    mask_csv = new_rows_df["format"] == "text/csv"
 
     if not master_df.empty and "documentId" in master_df.columns:
         existing_desc = master_df.set_index("documentId")["description"].to_dict()
@@ -616,7 +689,7 @@ def run_preservation_audit(master_df):
     audit_file = os.path.join(audit_folder, f"preservation_audit_{RUN_TIMESTAMP}.xlsx")
 
     # Only evaluate real files (skip .csv metadata)
-    df = master_df[master_df["format"] != ".csv"].copy()
+    df = master_df[master_df["format"] != "text/csv"].copy()
 
     # Define only logical source→target storage comparisons
     allowed_pairs = [
