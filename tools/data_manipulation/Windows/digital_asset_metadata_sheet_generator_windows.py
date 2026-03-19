@@ -126,10 +126,13 @@ VIEW_CODE_MAP = {
 }
 
 # ==================================================
-# Checksum generation for file integrity (optional)
-# =
-import hashlib
+# Scan warning log — populated during scanning
+# ==================================================
+scan_warnings = []
 
+# ==================================================
+# Checksum generation for file integrity (optional)
+# ==================================================
 def generate_checksum(file_path, block_size=65536):
     sha256 = hashlib.sha256()
 
@@ -140,7 +143,8 @@ def generate_checksum(file_path, block_size=65536):
 
         return sha256.hexdigest()
 
-    except Exception:
+    except Exception as e:
+        scan_warnings.append({"level": "ERROR", "file": file_path, "issue": f"Checksum failed: {e}"})
         return ""
 
 # ==================================================
@@ -158,8 +162,8 @@ def getDateCreated(path):
         for line in result.stdout.splitlines():
             if line.strip():
                 return line.replace("-", ":")[:19]
-    except Exception:
-        pass
+    except Exception as e:
+        scan_warnings.append({"level": "WARN", "file": path, "issue": f"exiftool failed: {e}"})
     if not path.lower().endswith(raw_exts):
         try:
             with Image.open(path) as img:
@@ -169,12 +173,13 @@ def getDateCreated(path):
                         tag = ExifTags.TAGS.get(tag_id, tag_id)
                         if tag in ("DateTimeOriginal", "DateTime"):
                             return value
-        except Exception:
-            pass
+        except Exception as e:
+            scan_warnings.append({"level": "WARN", "file": path, "issue": f"EXIF read failed: {e}"})
     try:
         ts = os.path.getctime(path)
         return datetime.fromtimestamp(ts).strftime("%Y:%m:%d %H:%M:%S")
-    except Exception:
+    except Exception as e:
+        scan_warnings.append({"level": "ERROR", "file": path, "issue": f"Date fallback failed: {e}"})
         return ""
 
 # ==================================================
@@ -420,6 +425,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 fmt = os.path.splitext(f)[1].lower()
 
                 checksum = generate_checksum(full)
+                date_created = getDateCreated(full)
 
                 asset_category = categoryRoot
                 if os.path.sep + "metadata" + os.path.sep in full:
@@ -453,7 +459,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "format":        mime_type,
                     "title":         base,
                     "description":   description_text,
-                    "created":       getDateCreated(full),
+                    "created":       date_created,
                     "creator":       meta.get("creator", ""),
                     "contributor":   meta.get("contributor", ""),
                     "publisher":     meta.get("publisher", ""),
@@ -477,7 +483,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "scanModeApplied": scanMode,
                     "checksumSHA256":  checksum,
                     # preserved for legacy/archival use
-                    "dateCreated":     getDateCreated(full),
+                    "dateCreated":     date_created,
                 }
 
                 # Add ALL mapping columns automatically
@@ -562,6 +568,7 @@ for cat in categories:
             subset_rows = [
                 r for r in all_rows
                     if (
+                        r["institutionCode"] == inst and
                         r["collectionCode"] == coll and
                         r["assetCategory"] == cat and
                         r["format"] != "text/csv" and
@@ -860,6 +867,16 @@ if output_choice in ("Excel only", "Both"):
 # Run preservation audit
 # ==================================================
 audit_path = run_preservation_audit(updated_master_df)
+
+# ==================================================
+# Write scan warning log
+# ==================================================
+if scan_warnings:
+    log_path = os.path.join(rootFolder, "DAMSG_output", f"scan_warnings_{RUN_TIMESTAMP}.csv")
+    pd.DataFrame(scan_warnings).to_csv(log_path, index=False)
+    print(f"Scan warnings written ({len(scan_warnings)} issues): {log_path}")
+else:
+    print("Scan completed with no warnings.")
 
 # ==================================================
 # Optionally, open files automatically
