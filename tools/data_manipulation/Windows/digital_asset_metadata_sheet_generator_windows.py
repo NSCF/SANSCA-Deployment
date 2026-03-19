@@ -233,7 +233,9 @@ if not EXIFTOOL_AVAILABLE:
         "exiftool was not found on your PATH.\n\n"
         "Date extraction will fall back to filesystem creation time, "
         "which may not reflect the original capture date.\n\n"
-        "Install via Homebrew:  brew install exiftool"
+        "Mac:     brew install exiftool\n"
+        "Windows: download exiftool(-k).exe from exiftool.org,\n"
+        "         rename to exiftool.exe, place in C:\\Windows\\"
     )
 
 Label(root,text="Select Root Folder and Mapping CSV",font=("Arial",12,"bold")).pack(pady=10)
