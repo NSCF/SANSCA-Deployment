@@ -440,6 +440,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 base = os.path.splitext(f)[0]
                 fmt = os.path.splitext(f)[1].lower()
 
+                _update_progress(f, collectionCode)
                 checksum = generate_checksum(full)
                 date_created = getDateCreated(full)
 
@@ -545,6 +546,27 @@ if os.path.isfile(master_csv):
     master_df = pd.read_csv(master_csv)
 else:
     master_df = pd.DataFrame()
+
+# ==================================================
+# Progress window
+# ==================================================
+progress_win = Tk()
+progress_win.title("Scanning…")
+progress_win.resizable(False, False)
+progress_win.geometry("520x90")
+
+_prog_label = Label(progress_win, text="Starting scan…", anchor="w", padx=12, pady=8)
+_prog_label.pack(fill="x")
+_prog_count = Label(progress_win, text="", anchor="w", padx=12, fg="#555")
+_prog_count.pack(fill="x")
+
+_scanned_total = [0]
+
+def _update_progress(filename, collection):
+    _scanned_total[0] += 1
+    _prog_label.config(text=f"[{collection}]  {filename}")
+    _prog_count.config(text=f"{_scanned_total[0]} file(s) scanned")
+    progress_win.update()
 
 # ==================================================
 # Scan, generate subset CSVs, and append newest metadata
@@ -668,6 +690,8 @@ for cat in categories:
 
                 all_rows.append(row_data)
 
+
+progress_win.destroy()
 
 # ==================================================
 # Convert all_rows to DataFrame safely
