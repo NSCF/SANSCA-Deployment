@@ -130,6 +130,20 @@ VIEW_CODE_MAP = {
 # ==================================================
 scan_warnings = []
 
+# Detect exiftool once so we don't log a FileNotFoundError for every file
+EXIFTOOL_AVAILABLE = bool(
+    subprocess.run(
+        ["exiftool", "-ver"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    ).returncode == 0
+    if __import__("shutil").which("exiftool") else False
+)
+if not EXIFTOOL_AVAILABLE:
+    scan_warnings.append({"level": "WARN", "file": "", "issue": "exiftool not found on PATH — date extraction will fall back to filesystem ctime"})
+
+# Extensions that Pillow cannot open (non-image formats)
+PILLOW_UNSUPPORTED = (".pdf", ".csv", ".txt", ".xml", ".mp4", ".mov", ".avi", ".wav", ".mp3")
+
 # ==================================================
 # Checksum generation for file integrity (optional)
 # ==================================================
@@ -152,19 +166,21 @@ def generate_checksum(file_path, block_size=65536):
 # ==================================================
 def getDateCreated(path):
     raw_exts = (".nef", ".cr2", ".cr3", ".arw", ".dng", ".orf", ".rw2")
-    try:
-        result = subprocess.run(
-            ["exiftool", "-s3",
-             "-DateTimeOriginal", "-CreateDate", "-DateCreated",
-             "-XMP:CreateDate", "-XMP:DateCreated", path],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
-        )
-        for line in result.stdout.splitlines():
-            if line.strip():
-                return line.replace("-", ":")[:19]
-    except Exception as e:
-        scan_warnings.append({"level": "WARN", "file": path, "issue": f"exiftool failed: {e}"})
-    if not path.lower().endswith(raw_exts):
+    ext = os.path.splitext(path)[1].lower()
+    if EXIFTOOL_AVAILABLE:
+        try:
+            result = subprocess.run(
+                ["exiftool", "-s3",
+                 "-DateTimeOriginal", "-CreateDate", "-DateCreated",
+                 "-XMP:CreateDate", "-XMP:DateCreated", path],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+            )
+            for line in result.stdout.splitlines():
+                if line.strip():
+                    return line.replace("-", ":")[:19]
+        except Exception as e:
+            scan_warnings.append({"level": "WARN", "file": path, "issue": f"exiftool error: {e}"})
+    if ext not in raw_exts and ext not in PILLOW_UNSUPPORTED:
         try:
             with Image.open(path) as img:
                 exif = img._getexif()
@@ -516,6 +532,12 @@ if clearMasterFilesVar.get():
             try:
                 os.remove(os.path.join(output_folder, f))
                 print(f"Cleared audit file: {f}")
+            except Exception as e:
+                print(f"Could not delete {f}: {e}")
+        if f.startswith("scan_warnings_") and f.endswith(".csv"):
+            try:
+                os.remove(os.path.join(output_folder, f))
+                print(f"Cleared scan warnings: {f}")
             except Exception as e:
                 print(f"Could not delete {f}: {e}")
 
