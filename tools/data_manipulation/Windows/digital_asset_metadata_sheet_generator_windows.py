@@ -4,14 +4,49 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 from tkinter import (
-    Tk, Canvas, Label, Button, StringVar, BooleanVar, OptionMenu, Checkbutton,
-    filedialog, messagebox, DISABLED, NORMAL
+    Tk, Canvas, Label, Button, StringVar, BooleanVar,
+    OptionMenu, Checkbutton, filedialog, messagebox, DISABLED, NORMAL
 )
 from PIL import Image, ExifTags, ImageTk
 import platform
 import sys
 import pathlib
 import hashlib
+
+# ==================================================
+# Google Sheets configuration
+# ==================================================
+SHEET_ID = "1AVqVoy8Hvk3GpJ0mCMXHjbZwDvMOGxa50CdH0Jh6bOU"
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/{id}/gviz/tq?tqx=out:csv&sheet={sheet}".format
+
+# ==================================================
+# Category → output target routing
+# ==================================================
+CATEGORY_TARGETS = {
+    "digital_vouchers": ["LA"],
+    "specimen_labels":  ["LA", "AtoM"],
+    "registers":        ["AtoM"],
+}
+
+# ==================================================
+# AtoM CSV column order (matches master_atom sheet)
+# ==================================================
+ATOM_COLUMNS = [
+    "Issues and Notes", "legacyId", "parentId", "qubitParentSlug", "accessionNumber",
+    "identifier", "title", "levelOfDescription", "extentAndMedium", "repository",
+    "archivalHistory", "acquisition", "scopeAndContent", "appraisal", "accruals",
+    "arrangement", "accessConditions", "reproductionConditions", "language", "script",
+    "languageNote", "physicalCharacteristics", "findingAids", "locationOfOriginals",
+    "locationOfCopies", "relatedUnitsOfDescription", "publicationNote",
+    "digitalObjectPath", "digitalObjectURI", "generalNote", "subjectAccessPoints",
+    "placeAccessPoints", "nameAccessPoints", "genreAccessPoints", "descriptionIdentifier",
+    "institutionIdentifier", "rules", "descriptionStatus", "levelOfDetail",
+    "revisionHistory", "languageOfDescription", "scriptOfDescription", "sources",
+    "archivistNote", "publicationStatus", "physicalObjectName", "physicalObjectLocation",
+    "physicalObjectType", "alternativeIdentifiers", "alternativeIdentifierLabels",
+    "eventDates", "eventTypes", "eventStartDates", "eventEndDates",
+    "eventActors", "eventActorHistories", "culture",
+]
 
 # ==================================================
 # System files to ignore during scanning
@@ -225,7 +260,8 @@ def generate_metadata_document_id(institution_code, collection_code, category, r
 # ==================================================
 root = Tk()
 root.title("SANSCA Digital Asset Metadata Sheet Generator")
-root.geometry("850x800")
+root.geometry("850x950")
+root.resizable(False, False)
 
 if not EXIFTOOL_AVAILABLE:
     messagebox.showwarning(
@@ -267,6 +303,7 @@ scanModeVar.set(scanModes[0])
 scanTypeVar.set(scanTypes[0])
 
 mappingDF = None
+atomMappingDF = None
 
 # ==================================================
 # UI functions
@@ -274,12 +311,12 @@ mappingDF = None
 script_dir = pathlib.Path(__file__).parent.resolve()
 logo_path = script_dir / "nscf_logo_crop.png"
 
-canvas = Canvas(root, width=300, height=150, bg="white", highlightthickness=0)
-canvas.pack(pady=10)
+canvas = Canvas(root, width=300, height=80, bg="white", highlightthickness=0)
+canvas.pack(pady=5)
 
 try:
     logo_img = Image.open(logo_path).convert("RGB")
-    logo_img = logo_img.resize((300, 150), Image.Resampling.LANCZOS)
+    logo_img = logo_img.resize((300, 80), Image.Resampling.LANCZOS)
     root.logo_tk = ImageTk.PhotoImage(logo_img)
     canvas.create_image(0, 0, anchor="nw", image=root.logo_tk)
 except Exception as e:
@@ -295,34 +332,23 @@ def selectRootFolder():
     rootFolderVar.set(p)
     rootLabel.config(text=p)
 
-    global mappingDF
-    mapping_path = os.path.join(p, "DAMSG_mapping", "collections_mapping_2026.csv")
-    if not os.path.isfile(mapping_path):
-        messagebox.showerror("Mapping CSV Error",
-                             f"Mapping file not found at:\n{mapping_path}")
-        mappingDF = None
-        return
-
+def loadGoogleSheets():
+    global mappingDF, atomMappingDF
     try:
-        df = pd.read_csv(mapping_path)
+        sheetStatusLabel.config(text="Connecting…", fg="gray")
+        root.update()
+        mappingDF     = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master"))
+        atomMappingDF = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master_atom"))
+        updateInstitutionOptions()
+        updateCollectionOptions()
+        updateScanModeUI()
+        sheetStatusLabel.config(
+            text=f"Connected — {len(mappingDF)} LA rows, {len(atomMappingDF)} AtoM rows",
+            fg="green"
+        )
     except Exception as e:
-        messagebox.showerror("CSV Error", str(e))
-        mappingDF = None
-        return
-
-    required = {"institutionCode","collectionCode","creator","contributor",
-                "license","rightsHolder","holdingInstitution","description"}
-    missing = required - set(df.columns)
-    if missing:
-        messagebox.showerror("Mapping CSV Error",
-                             f"Missing required columns:\n{', '.join(sorted(missing))}")
-        mappingDF = None
-        return
-
-    mappingDF = df
-    updateInstitutionOptions()
-    updateCollectionOptions()
-    updateScanModeUI()
+        messagebox.showerror("Google Sheets Error", str(e))
+        sheetStatusLabel.config(text="Connection failed", fg="red")
 
 def updateInstitutionOptions():
     if mappingDF is None:
@@ -364,12 +390,17 @@ def updateScanModeUI(*args):
 institutionVar.trace_add("write", updateCollectionOptions)
 scanModeVar.trace_add("write", updateScanModeUI)
 
+
 # ==================================================
 # UI layout
 # ==================================================
 Button(root,text="Select SANSCA Root Folder",command=selectRootFolder,bg="lightgreen").pack(fill="x", padx=20, pady=5)
 rootLabel=Label(root,text="",wraplength=800,anchor="w")
 rootLabel.pack()
+
+Button(root,text="Load Mapping from Google Sheets",command=loadGoogleSheets,bg="lightyellow").pack(fill="x", padx=20, pady=5)
+sheetStatusLabel=Label(root,text="Mapping not loaded",wraplength=800,anchor="w",fg="gray")
+sheetStatusLabel.pack()
 
 Label(root,text="Scan Type:").pack(pady=5)
 OptionMenu(root,scanTypeVar,*scanTypes).pack(fill="x", padx=20)
@@ -412,7 +443,7 @@ root.mainloop()
 # Validation
 # ==================================================
 if mappingDF is None:
-    sys.exit("No mapping CSV loaded.")
+    sys.exit("Google Sheets mapping not loaded. Please select a credentials.json file.")
 rootFolder = rootFolderVar.get()
 institution = institutionVar.get()
 collection = collectionVar.get()
@@ -431,6 +462,7 @@ fileTypes = {
 }
 extensions = tuple(fileTypes[fileFilterVar.get()])
 all_rows = []
+atom_rows = []
 
 def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
     collectionRoot = os.path.join(rootFolder, categoryRoot, institutionCode, collectionCode)
@@ -550,6 +582,12 @@ if clearMasterFilesVar.get():
             try:
                 os.remove(os.path.join(output_folder, f))
                 print(f"Cleared scan warnings: {f}")
+            except Exception as e:
+                print(f"Could not delete {f}: {e}")
+        if f.startswith("atom_import_") and f.endswith(".csv"):
+            try:
+                os.remove(os.path.join(output_folder, f))
+                print(f"Cleared AtoM import file: {f}")
             except Exception as e:
                 print(f"Could not delete {f}: {e}")
 
@@ -700,6 +738,58 @@ for cat in categories:
                         row_data[col] = meta.get(col, "")
 
                 all_rows.append(row_data)
+
+            # --------------------------------------------------
+            # AtoM output — generate parent + item rows
+            # --------------------------------------------------
+            if "AtoM" in CATEGORY_TARGETS.get(cat, []) and atomMappingDF is not None:
+                try:
+                    atom_meta = atomMappingDF[
+                        (atomMappingDF["institutionCode"] == inst) &
+                        (atomMappingDF["collectionCode"] == coll)
+                    ].iloc[0]
+                except IndexError:
+                    scan_warnings.append({"level": "WARN", "file": "", "issue": f"No AtoM mapping row for {inst}/{coll} — skipped"})
+                    atom_meta = {}
+
+                parent_legacy_id = f"{inst}_{coll}_{cat}"
+                inst_name = INSTITUTION_CODE_MAP.get(inst, inst)
+
+                # Parent row
+                parent_row = {col: "" for col in ATOM_COLUMNS}
+                parent_row["legacyId"]           = parent_legacy_id
+                parent_row["title"]              = atom_meta.get("title", f"{inst} {coll}")
+                parent_row["levelOfDescription"] = atom_meta.get("levelOfDescription", "Collection")
+                parent_row["repository"]         = inst_name
+                parent_row["institutionIdentifier"] = inst
+                for col in ATOM_COLUMNS:
+                    if col in atom_meta and not parent_row[col]:
+                        parent_row[col] = atom_meta.get(col, "")
+                atom_rows.append(parent_row)
+
+                # Item rows — one per scanned file in this collection
+                for item in subset_rows:
+                    item_row = {col: "" for col in ATOM_COLUMNS}
+                    item_row["parentId"]            = parent_legacy_id
+                    item_row["identifier"]          = item.get("documentId", "")
+                    item_row["title"]               = item.get("title", "")
+                    item_row["levelOfDescription"]  = "Item"
+                    item_row["repository"]          = inst_name
+                    item_row["institutionIdentifier"] = inst
+                    item_row["digitalObjectPath"]   = item.get("relativePath", "")
+                    item_row["eventDates"]          = item.get("dateCreated", "")
+                    item_row["eventStartDates"]     = item.get("dateCreated", "")
+                    item_row["eventTypes"]          = atom_meta.get("eventTypes", "creation")
+                    item_row["eventActors"]         = atom_meta.get("eventActors", "")
+                    item_row["eventActorHistories"] = atom_meta.get("eventActorHistories", "")
+                    item_row["language"]            = atom_meta.get("language", "")
+                    item_row["script"]              = atom_meta.get("script", "")
+                    item_row["accessConditions"]    = atom_meta.get("accessConditions", "")
+                    item_row["reproductionConditions"] = atom_meta.get("reproductionConditions", "")
+                    item_row["publicationStatus"]   = atom_meta.get("publicationStatus", "")
+                    item_row["culture"]             = atom_meta.get("culture", "")
+                    item_row["extentAndMedium"]     = f"1 {item.get('format', '').split('/')[-1].upper()} file"
+                    atom_rows.append(item_row)
 
 
 progress_win.destroy()
@@ -936,6 +1026,15 @@ else:
     print("Scan completed with no warnings.")
 
 # ==================================================
+# Write AtoM import CSV
+# ==================================================
+atom_csv = None
+if atom_rows:
+    atom_csv = os.path.join(rootFolder, "DAMSG_output", f"atom_import_{RUN_TIMESTAMP}.csv")
+    pd.DataFrame(atom_rows, columns=ATOM_COLUMNS).to_csv(atom_csv, index=False)
+    print(f"AtoM import CSV written ({len(atom_rows)} rows): {atom_csv}")
+
+# ==================================================
 # Optionally, open files automatically
 # ==================================================
 def open_file(filepath):
@@ -956,3 +1055,5 @@ if outputChoiceVar.get() in ("Both","Excel only"):
     open_file(master_xlsx)
 
 open_file(audit_path)
+if atom_csv:
+    open_file(atom_csv)
