@@ -339,6 +339,13 @@ def loadGoogleSheets():
         root.update()
         mappingDF     = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master"))
         atomMappingDF = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master_atom"))
+
+        # Build institution name map dynamically from the sheet
+        global INSTITUTION_CODE_MAP
+        INSTITUTION_CODE_MAP = dict(zip(
+            mappingDF["institutionCode"].dropna(),
+            mappingDF["holdingInstitution"].dropna()
+        ))
         updateInstitutionOptions()
         updateCollectionOptions()
         updateScanModeUI()
@@ -572,7 +579,7 @@ if clearMasterFilesVar.get():
             except Exception as e:
                 print(f"Could not delete {master_file}: {e}")
     for f in os.listdir(output_folder):
-        if f.startswith("preservation_audit_") and f.endswith(".xlsx"):
+        if f.startswith("preservation_audit_") and f.endswith(".csv"):
             try:
                 os.remove(os.path.join(output_folder, f))
                 print(f"Cleared audit file: {f}")
@@ -905,7 +912,7 @@ def run_preservation_audit(master_df):
     audit_folder = os.path.join(rootFolder, "DAMSG_output")
     os.makedirs(audit_folder, exist_ok=True)
 
-    audit_file = os.path.join(audit_folder, f"preservation_audit_{RUN_TIMESTAMP}.xlsx")
+    audit_base = os.path.join(audit_folder, f"preservation_audit_{RUN_TIMESTAMP}")
 
     # Only evaluate real files (skip .csv metadata)
     df = master_df[master_df["format"] != "text/csv"].copy()
@@ -985,15 +992,16 @@ def run_preservation_audit(master_df):
     mismatch_df = pd.DataFrame(mismatch_rows)
     duplicates_df = pd.DataFrame(duplicate_rows)
 
-    # Write Excel
-    with pd.ExcelWriter(audit_file, engine="openpyxl") as writer:
-        summary_df.to_excel(writer, sheet_name="Summary", index=False)
-        if not missing_df.empty:
-            missing_df.to_excel(writer, sheet_name="Missing Files", index=False)
-        if not mismatch_df.empty:
-            mismatch_df.to_excel(writer, sheet_name="Checksum Mismatch", index=False)
-        if not duplicates_df.empty:
-            duplicates_df.to_excel(writer, sheet_name="Duplicates", index=False)
+    # Write CSVs — one per section, only if non-empty
+    audit_file = f"{audit_base}_summary.csv"
+    summary_df.to_csv(audit_file, index=False)
+
+    if not missing_df.empty:
+        missing_df.to_csv(f"{audit_base}_missing.csv", index=False)
+    if not mismatch_df.empty:
+        mismatch_df.to_csv(f"{audit_base}_mismatch.csv", index=False)
+    if not duplicates_df.empty:
+        duplicates_df.to_csv(f"{audit_base}_duplicates.csv", index=False)
 
     print(f"Preservation audit report created: {audit_file}")
 
