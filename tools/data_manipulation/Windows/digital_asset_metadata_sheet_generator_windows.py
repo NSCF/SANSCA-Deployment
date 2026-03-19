@@ -227,6 +227,15 @@ root = Tk()
 root.title("SANSCA Digital Asset Metadata Sheet Generator")
 root.geometry("850x800")
 
+if not EXIFTOOL_AVAILABLE:
+    messagebox.showwarning(
+        "exiftool not found",
+        "exiftool was not found on your PATH.\n\n"
+        "Date extraction will fall back to filesystem creation time, "
+        "which may not reflect the original capture date.\n\n"
+        "Install via Homebrew:  brew install exiftool"
+    )
+
 Label(root,text="Select Root Folder and Mapping CSV",font=("Arial",12,"bold")).pack(pady=10)
 
 rootFolderVar = StringVar()
