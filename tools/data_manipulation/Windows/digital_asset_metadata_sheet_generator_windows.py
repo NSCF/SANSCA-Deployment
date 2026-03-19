@@ -38,6 +38,29 @@ INSTITUTION_CODE_MAP = {
 }
 
 # ==================================================
+# Audience map — derived from asset category folder name
+# Add new categories here as needed
+# ==================================================
+AUDIENCE_MAP = {
+    "digital_vouchers": "Researchers; Scientists; Public",
+    "specimen_labels": "Researchers; Data curators",
+    "registers":       "Archivists; Researchers",
+}
+AUDIENCE_FALLBACK = "Review needed"  # Fallback audience if category not in map
+
+# ==================================================
+# Description templates — derived from asset category folder name
+# Placeholders: {collectionCode}, {institutionCode}
+# Add new categories here as needed
+# ==================================================
+DESCRIPTION_TEMPLATE_MAP = {
+    "digital_vouchers": "Digital voucher image of natural science specimen — {collectionCode}",
+    "specimen_labels":  "Specimen label scan — {collectionCode}",
+    "registers":        "Archival collection register",
+}
+DESCRIPTION_FALLBACK = "Review needed — {collectionCode}"
+
+# ==================================================
 # Excluded Root Folders
 # ==================================================
 EXCLUDED_ROOT_FOLDERS = (
@@ -405,7 +428,15 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 parts = base.split("_")
                 view_code = parts[1] if len(parts) > 1 else ""
                 view_desc = VIEW_CODE_MAP.get(view_code.lower(), "")
-                description_text = view_desc if view_desc else meta.get("description", collectionCode)
+                if view_desc:
+                    description_text = view_desc
+                elif categoryRoot.lower() in DESCRIPTION_TEMPLATE_MAP:
+                    description_text = DESCRIPTION_TEMPLATE_MAP[categoryRoot.lower()].format(
+                        collectionCode=collectionCode,
+                        institutionCode=institutionCode
+                    )
+                else:
+                    description_text = meta.get("description", collectionCode)
 
                 if fmt == ".csv":
                     doc_id = generate_metadata_document_id(institutionCode, collectionCode, categoryRoot, rel)
@@ -426,7 +457,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "creator":       meta.get("creator", ""),
                     "contributor":   meta.get("contributor", ""),
                     "publisher":     meta.get("publisher", ""),
-                    "audience":      meta.get("audience", ""),
+                    "audience":      AUDIENCE_MAP.get(categoryRoot.lower(), AUDIENCE_FALLBACK),
                     "source":        meta.get("source", ""),
                     "license":       meta.get("license", ""),
                     "rightsHolder":  meta.get("rightsHolder", ""),
@@ -516,6 +547,16 @@ for cat in categories:
             except IndexError:
                 continue
 
+            if clearPreviousMetadataVar.get():
+                meta_folder_pre = os.path.join(inst_path, coll, "metadata")
+                if os.path.isdir(meta_folder_pre):
+                    for old_file in os.listdir(meta_folder_pre):
+                        if old_file.lower().endswith(".csv"):
+                            try:
+                                os.remove(os.path.join(meta_folder_pre, old_file))
+                            except Exception as e:
+                                print(f"Could not delete {old_file}: {e}")
+
             all_rows.extend(scan_collection(cat, inst, coll, meta))
 
             subset_rows = [
@@ -530,14 +571,6 @@ for cat in categories:
             if subset_rows:
                 meta_folder = os.path.join(inst_path, coll, "metadata")
                 os.makedirs(meta_folder, exist_ok=True)
-
-                if clearPreviousMetadataVar.get():
-                    for old_file in os.listdir(meta_folder):
-                        if old_file.lower().endswith(".csv"):
-                            try:
-                                os.remove(os.path.join(meta_folder, old_file))
-                            except Exception as e:
-                                print(f"Could not delete {old_file}: {e}")
 
                 subset_path = os.path.join(meta_folder, f"{coll}_{cat}_metadata_{RUN_TIMESTAMP}.csv")
 
@@ -567,13 +600,17 @@ for cat in categories:
                     "type":          "Text",
                     "format":        "text/csv",
                     "title":         os.path.splitext(os.path.basename(subset_path))[0],
-                    "description":   meta.get("description", ""),
+                    "description":   (
+                        f"Metadata file for {inst}_{coll}" if scanMode == "Single Collection"
+                        else f"Metadata file for {inst}" if scanMode == "All Collections (selected institution)"
+                        else "Metadata file for all collections held by NSCF partner institutions"
+                    ) + f" [{len(subset_rows)} assets captured]",
                     "created":       now_ts,
                     "creator":       meta.get("creator", ""),
                     "contributor":   meta.get("contributor", ""),
                     "publisher":     meta.get("publisher", ""),
-                    "audience":      meta.get("audience", ""),
-                    "source":        meta.get("source", ""),
+                    "audience":      "Data curators; Collection managers",
+                    "source":        f"Original digital assets — {inst}_{coll} ({cat})",
                     "license":       meta.get("license", ""),
                     "rightsHolder":  meta.get("rightsHolder", ""),
                     "references":    "",
@@ -595,8 +632,10 @@ for cat in categories:
                     "checksumSHA256":    generate_checksum(subset_path),
                 }
 
-                if "additionalNames" in mappingDF.columns and not row_data["additionalNames"].strip():
-                    row_data["additionalNames"] = meta.get("additionalNames", "")
+                # Add ALL mapping columns automatically (same as scan_collection)
+                for col in mappingDF.columns:
+                    if col not in row_data or (col == "additionalNames" and not row_data["additionalNames"].strip()):
+                        row_data[col] = meta.get(col, "")
 
                 all_rows.append(row_data)
 
@@ -658,26 +697,11 @@ if not new_rows_df.empty and required_cols.issubset(new_rows_df.columns):
             doc_id = row["documentId"]
             if doc_id in existing_desc and existing_desc[doc_id].strip():
                 return existing_desc[doc_id]
-            mode = row.get("scanModeApplied", "")
-            if mode == "Single Collection":
-                return f"Metadata file for {row['institutionCode']}_{row['collectionCode']}"
-            elif mode == "All Collections (selected institution)":
-                return f"Metadata file for {row['institutionCode']}"
-            else:
-                return "Metadata file for all collections held by NSCF partner institutions"
+            return row.get("description", "")
 
         new_rows_df.loc[mask_csv, "description"] = new_rows_df.loc[mask_csv].apply(preserve_or_generate_desc, axis=1)
     else:
-        def generate_desc(row):
-            mode = row.get("scanModeApplied", "")
-            if mode == "Single Collection":
-                return f"Metadata file for {row['institutionCode']}_{row['collectionCode']}"
-            elif mode == "All Collections (selected institution)":
-                return f"Metadata file for {row['institutionCode']}"
-            else:
-                return "Metadata file for all collections held by NSCF partner institutions"
-
-        new_rows_df.loc[mask_csv, "description"] = new_rows_df.loc[mask_csv].apply(generate_desc, axis=1)
+        pass  # description already set on row during scan
 
 # Fill additionalNames if empty
 if not new_rows_df.empty and "additionalNames" in new_rows_df.columns and "additionalNames" in mappingDF.columns:
