@@ -4,7 +4,7 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 from tkinter import (
-    Tk, Canvas, Label, Button, StringVar, OptionMenu,
+    Tk, Canvas, Label, Button, StringVar, BooleanVar, OptionMenu, Checkbutton,
     filedialog, messagebox, DISABLED, NORMAL
 )
 from PIL import Image, ExifTags, ImageTk
@@ -193,6 +193,8 @@ fileFilterVar = StringVar()
 outputChoiceVar = StringVar()
 scanModeVar = StringVar()
 scanTypeVar = StringVar()
+clearPreviousMetadataVar = BooleanVar(value=False)
+clearMasterFilesVar = BooleanVar(value=False)
 
 fileFilters = ["All","TIFF only","RAW only","JPEG only", "PDF only"]
 outputChoices = ["CSV only","Excel only","Both"]
@@ -333,6 +335,20 @@ OptionMenu(root,fileFilterVar,*fileFilters).pack(fill="x", padx=20)
 Label(root,text="Output Choice:").pack(pady=5)
 OptionMenu(root,outputChoiceVar,*outputChoices).pack(fill="x", padx=20)
 
+Checkbutton(
+    root,
+    text="Clear previous metadata files before scan (testing only)",
+    variable=clearPreviousMetadataVar,
+    fg="red"
+).pack(pady=5)
+
+Checkbutton(
+    root,
+    text="Clear master inventory files before scan (testing only)",
+    variable=clearMasterFilesVar,
+    fg="red"
+).pack(pady=2)
+
 Button(root,text="Start Processing",command=root.destroy,bg="lightblue").pack(pady=20)
 
 root.mainloop()
@@ -449,6 +465,23 @@ master_csv = os.path.join(rootFolder, "DAMSG_output", "digital_asset_inventory_m
 master_xlsx = os.path.join(rootFolder, "DAMSG_output", "digital_asset_inventory_master.xlsx")
 os.makedirs(os.path.dirname(master_csv), exist_ok=True)
 
+if clearMasterFilesVar.get():
+    output_folder = os.path.dirname(master_csv)
+    for master_file in (master_csv, master_xlsx):
+        if os.path.isfile(master_file):
+            try:
+                os.remove(master_file)
+                print(f"Cleared master file: {master_file}")
+            except Exception as e:
+                print(f"Could not delete {master_file}: {e}")
+    for f in os.listdir(output_folder):
+        if f.startswith("preservation_audit_") and f.endswith(".xlsx"):
+            try:
+                os.remove(os.path.join(output_folder, f))
+                print(f"Cleared audit file: {f}")
+            except Exception as e:
+                print(f"Could not delete {f}: {e}")
+
 if os.path.isfile(master_csv):
     master_df = pd.read_csv(master_csv)
 else:
@@ -497,8 +530,16 @@ for cat in categories:
             if subset_rows:
                 meta_folder = os.path.join(inst_path, coll, "metadata")
                 os.makedirs(meta_folder, exist_ok=True)
-                
-                subset_path = os.path.join(meta_folder, f"{coll}_metadata_{RUN_TIMESTAMP}.csv")
+
+                if clearPreviousMetadataVar.get():
+                    for old_file in os.listdir(meta_folder):
+                        if old_file.lower().endswith(".csv"):
+                            try:
+                                os.remove(os.path.join(meta_folder, old_file))
+                            except Exception as e:
+                                print(f"Could not delete {old_file}: {e}")
+
+                subset_path = os.path.join(meta_folder, f"{coll}_{cat}_metadata_{RUN_TIMESTAMP}.csv")
 
                 subset_df = pd.DataFrame(subset_rows)
 
@@ -525,7 +566,7 @@ for cat in categories:
                     "identifier":    "",
                     "type":          "Text",
                     "format":        "text/csv",
-                    "title":         os.path.basename(subset_path),
+                    "title":         os.path.splitext(os.path.basename(subset_path))[0],
                     "description":   meta.get("description", ""),
                     "created":       now_ts,
                     "creator":       meta.get("creator", ""),
@@ -623,7 +664,7 @@ if not new_rows_df.empty and required_cols.issubset(new_rows_df.columns):
             elif mode == "All Collections (selected institution)":
                 return f"Metadata file for {row['institutionCode']}"
             else:
-                return "Metadata file for all collections"
+                return "Metadata file for all collections held by NSCF partner institutions"
 
         new_rows_df.loc[mask_csv, "description"] = new_rows_df.loc[mask_csv].apply(preserve_or_generate_desc, axis=1)
     else:
@@ -634,7 +675,7 @@ if not new_rows_df.empty and required_cols.issubset(new_rows_df.columns):
             elif mode == "All Collections (selected institution)":
                 return f"Metadata file for {row['institutionCode']}"
             else:
-                return "Metadata file for all collections"
+                return "Metadata file for all collections held by NSCF partner institutions"
 
         new_rows_df.loc[mask_csv, "description"] = new_rows_df.loc[mask_csv].apply(generate_desc, axis=1)
 
@@ -783,9 +824,13 @@ def run_preservation_audit(master_df):
 # ==================================================
 # Write master CSV/Excel
 # ==================================================
-updated_master_df.to_csv(master_csv, index=False)
-updated_master_df.to_excel(master_xlsx, index=False)
-print(f"Processing complete. Master inventory updated: {master_csv}")
+output_choice = outputChoiceVar.get()
+if output_choice in ("CSV only", "Both"):
+    updated_master_df.to_csv(master_csv, index=False)
+    print(f"Processing complete. Master CSV updated: {master_csv}")
+if output_choice in ("Excel only", "Both"):
+    updated_master_df.to_excel(master_xlsx, index=False)
+    print(f"Processing complete. Master Excel updated: {master_xlsx}")
 
 # ==================================================
 # Run preservation audit
@@ -812,7 +857,4 @@ if outputChoiceVar.get() in ("Both","CSV only"):
 if outputChoiceVar.get() in ("Both","Excel only"):
     open_file(master_xlsx)
 
-# Run preservation audit
-run_preservation_audit(updated_master_df)    
-
-open_file(audit_path)    
+open_file(audit_path)
