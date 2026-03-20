@@ -808,6 +808,22 @@ for cat in categories:
                         parent_row[col] = atom_meta.get(col, "")
                 if not parent_row["repository"]:
                     parent_row["repository"] = inst_name
+
+                # Build extentAndMedium summary from child items
+                fmt_counts = {}
+                total_bytes = 0
+                for item in subset_rows:
+                    ext = item.get("format", "").split("/")[-1].upper() or "FILE"
+                    fmt_counts[ext] = fmt_counts.get(ext, 0) + 1
+                    try:
+                        total_bytes += os.path.getsize(item.get("fullPath", ""))
+                    except Exception:
+                        pass
+                total_mb = total_bytes / (1024 * 1024)
+                size_str = f"{total_mb:.1f} MB" if total_mb >= 1 else f"{total_bytes / 1024:.1f} KB"
+                fmt_str = "; ".join(f"{count} {fmt}" for fmt, count in sorted(fmt_counts.items()))
+                parent_row["extentAndMedium"] = f"{len(subset_rows)} item{'s' if len(subset_rows) != 1 else ''}: {fmt_str} ({size_str} total)"
+
                 atom_rows.append(parent_row)
 
                 # Item rows — one per scanned file in this collection
