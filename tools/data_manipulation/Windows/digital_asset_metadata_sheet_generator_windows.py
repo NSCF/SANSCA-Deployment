@@ -47,6 +47,8 @@ ATOM_COLUMNS = [
     "eventDates", "eventTypes", "eventStartDates", "eventEndDates",
     "eventActors", "eventActorHistories", "culture",
 ]
+# Extended columns for output files — includes audit fields not part of AtoM import
+ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType"]
 
 # ==================================================
 # System files to ignore during scanning
@@ -604,7 +606,7 @@ if clearMasterFilesVar.get():
                 print(f"Cleared scan warnings: {f}")
             except Exception as e:
                 print(f"Could not delete {f}: {e}")
-        if f.startswith("atom_import_") and f.endswith(".csv"):
+        if f.startswith("digital_asset_inventory_atom_") and f.endswith(".csv"):
             try:
                 os.remove(os.path.join(output_folder, f))
                 print(f"Cleared AtoM import file: {f}")
@@ -711,27 +713,28 @@ for cat in categories:
             if subset_rows:
                 meta_folder = os.path.join(inst_path, coll, "metadata")
                 os.makedirs(meta_folder, exist_ok=True)
+                scanDateHuman = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                subset_path = os.path.join(meta_folder, f"{coll}_{cat}_metadata_{RUN_TIMESTAMP}.csv")
+                def write_header_csv(path, df):
+                    with open(path, "w", newline="", encoding="utf-8") as f:
+                        f.write(f"scanType,{scanType}\n")
+                        f.write(f"scanMode,{scanMode}\n")
+                        f.write(f"scanTimestamp,{RUN_TIMESTAMP}\n")
+                        f.write(f"scanDate,{scanDateHuman}\n")
+                        f.write(f"institutionCode,{inst}\n")
+                        f.write(f"collectionCode,{coll}\n\n")
+                        df.to_csv(f, index=False)
+                    print(f"Collection metadata CSV generated: {path}")
 
-                subset_df = pd.DataFrame(subset_rows)
+                # LA format CSV
+                if "LA" in targets:
+                    subset_path = os.path.join(meta_folder, f"{coll}_{cat}_metadata_la_{RUN_TIMESTAMP}.csv")
+                    write_header_csv(subset_path, pd.DataFrame(subset_rows))
 
-                with open(subset_path, "w", newline="", encoding="utf-8") as f:
-                    
-                    scanDateHuman = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                # AtoM format CSV — written after AtoM row generation below
 
-                    # Write scan metadata header
-                    f.write(f"scanType,{scanType}\n")
-                    f.write(f"scanMode,{scanMode}\n")
-                    f.write(f"scanTimestamp,{RUN_TIMESTAMP}\n")
-                    f.write(f"scanDate,{scanDateHuman}\n")
-                    f.write(f"institutionCode,{inst}\n")
-                    f.write(f"collectionCode,{coll}\n\n")
-
-                    # Write table data
-                    subset_df.to_csv(f, index=False)
-
-                print(f"Collection metadata CSV generated: {subset_path}")
+                # Use LA path for the master row reference (LA only)
+                subset_path = os.path.join(meta_folder, f"{coll}_{cat}_metadata_la_{RUN_TIMESTAMP}.csv") if "LA" in targets else ""
 
                 now_ts = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
                 if meta is not None:
@@ -829,7 +832,27 @@ for cat in categories:
                     item_row["publicationStatus"]   = atom_meta.get("publicationStatus", "")
                     item_row["culture"]             = atom_meta.get("culture", "")
                     item_row["extentAndMedium"]     = f"1 {item.get('format', '').split('/')[-1].upper()} file"
+                    item_row["checksumSHA256"]      = item.get("checksumSHA256", "")
+                    item_row["scanType"]            = item.get("scanType", "")
                     atom_rows.append(item_row)
+
+                # Write AtoM per-collection metadata CSV now that rows are generated
+                if subset_rows:
+                    meta_folder_atom = os.path.join(inst_path, coll, "metadata")
+                    os.makedirs(meta_folder_atom, exist_ok=True)
+                    atom_subset_rows = [r for r in atom_rows if str(r.get("parentId", "") or "").startswith(f"{inst}_{coll}_")]
+                    if atom_subset_rows:
+                        atom_subset_path = os.path.join(meta_folder_atom, f"{coll}_{cat}_metadata_atom_{RUN_TIMESTAMP}.csv")
+                        scanDateHuman = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        with open(atom_subset_path, "w", newline="", encoding="utf-8") as f:
+                            f.write(f"scanType,{scanType}\n")
+                            f.write(f"scanMode,{scanMode}\n")
+                            f.write(f"scanTimestamp,{RUN_TIMESTAMP}\n")
+                            f.write(f"scanDate,{scanDateHuman}\n")
+                            f.write(f"institutionCode,{inst}\n")
+                            f.write(f"collectionCode,{coll}\n\n")
+                            pd.DataFrame(atom_subset_rows, columns=ATOM_OUTPUT_COLUMNS).to_csv(f, index=False)
+                        print(f"Collection metadata CSV generated: {atom_subset_path}")
 
 
 progress_win.destroy()
@@ -940,7 +963,7 @@ if "checksumSHA256" not in updated_master_df.columns:
 # ==================================================
 from collections import Counter
 
-def run_preservation_audit(master_df):
+def run_preservation_audit(master_df, atom_df=None):
 
     audit_folder = os.path.join(rootFolder, "DAMSG_output")
     os.makedirs(audit_folder, exist_ok=True)
@@ -1025,6 +1048,52 @@ def run_preservation_audit(master_df):
     mismatch_df = pd.DataFrame(mismatch_rows)
     duplicates_df = pd.DataFrame(duplicate_rows)
 
+    # AtoM coverage audit — same cross-storage logic as LA
+    atom_missing_rows = []
+    atom_mismatch_rows = []
+    atom_summary_rows = []
+    atom_duplicate_rows = []
+    if atom_df is not None and len(atom_df) > 0:
+        atom_items = pd.DataFrame([r for r in atom_df if r.get("levelOfDescription") == "Item"])
+        if not atom_items.empty:
+            atom_items = atom_items.rename(columns={"digitalObjectPath": "relativePath"})
+
+            for source, target in allowed_pairs:
+                source_df = atom_items[atom_items["scanType"] == source]
+                target_df = atom_items[atom_items["scanType"] == target]
+                if source_df.empty and target_df.empty:
+                    continue
+
+                source_index = dict(zip(source_df["relativePath"], source_df["checksumSHA256"]))
+                target_index = dict(zip(target_df["relativePath"], target_df["checksumSHA256"]))
+
+                missing, mismatch, matching = [], [], []
+                for path, checksum in source_index.items():
+                    if path not in target_index:
+                        missing.append(path)
+                    elif target_index[path] != checksum:
+                        mismatch.append(path)
+                    else:
+                        matching.append(path)
+
+                atom_summary_rows.append({
+                    "Source Storage": source, "Target Storage": target,
+                    "Total Source Files": len(source_index),
+                    "Matching": len(matching),
+                    "Missing on Target": len(missing),
+                    "Checksum Mismatch": len(mismatch)
+                })
+                for p in missing:
+                    atom_missing_rows.append({"Source Storage": source, "Missing From": target, "relativePath": p})
+                for p in mismatch:
+                    atom_mismatch_rows.append({"Source Storage": source, "Mismatch With": target, "relativePath": p})
+
+            checksum_counts = Counter(atom_items["checksumSHA256"])
+            for chk, count in checksum_counts.items():
+                if count > 1:
+                    for _, row in atom_items[atom_items["checksumSHA256"] == chk].iterrows():
+                        atom_duplicate_rows.append({"checksum": chk, "relativePath": row["relativePath"], "scanType": row["scanType"]})
+
     # Write CSVs — one per section, only if non-empty
     audit_file = f"{audit_base}_summary.csv"
     summary_df.to_csv(audit_file, index=False)
@@ -1035,6 +1104,14 @@ def run_preservation_audit(master_df):
         mismatch_df.to_csv(f"{audit_base}_mismatch.csv", index=False)
     if not duplicates_df.empty:
         duplicates_df.to_csv(f"{audit_base}_duplicates.csv", index=False)
+    if atom_summary_rows:
+        pd.DataFrame(atom_summary_rows).to_csv(f"{audit_base}_atom_summary.csv", index=False)
+    if atom_missing_rows:
+        pd.DataFrame(atom_missing_rows).to_csv(f"{audit_base}_atom_missing.csv", index=False)
+    if atom_mismatch_rows:
+        pd.DataFrame(atom_mismatch_rows).to_csv(f"{audit_base}_atom_mismatch.csv", index=False)
+    if atom_duplicate_rows:
+        pd.DataFrame(atom_duplicate_rows).to_csv(f"{audit_base}_atom_duplicates.csv", index=False)
 
     print(f"Preservation audit report created: {audit_file}")
 
@@ -1054,7 +1131,7 @@ if output_choice in ("Excel only", "Both"):
 # ==================================================
 # Run preservation audit
 # ==================================================
-audit_path = run_preservation_audit(updated_master_df)
+audit_path = run_preservation_audit(updated_master_df, atom_rows)
 
 # ==================================================
 # Write scan warning log
@@ -1071,7 +1148,7 @@ else:
 # ==================================================
 atom_csv = None
 if atom_rows:
-    atom_csv = os.path.join(rootFolder, "DAMSG_output", f"atom_import_{RUN_TIMESTAMP}.csv")
+    atom_csv = os.path.join(rootFolder, "DAMSG_output", f"digital_asset_inventory_atom_{RUN_TIMESTAMP}.csv")
     pd.DataFrame(atom_rows, columns=ATOM_COLUMNS).to_csv(atom_csv, index=False)
     print(f"AtoM import CSV written ({len(atom_rows)} rows): {atom_csv}")
 
