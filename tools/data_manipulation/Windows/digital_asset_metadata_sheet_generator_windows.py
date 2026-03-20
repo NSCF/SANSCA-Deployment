@@ -185,6 +185,23 @@ PILLOW_UNSUPPORTED = (".pdf", ".csv", ".txt", ".xml", ".mp4", ".mov", ".avi", ".
 # ==================================================
 # Checksum generation for file integrity (optional)
 # ==================================================
+def build_extent_summary(rows):
+    """Build a human-readable extent summary from a list of scanned file rows."""
+    fmt_counts = {}
+    total_bytes = 0
+    for item in rows:
+        ext = item.get("format", "").split("/")[-1].upper() or "FILE"
+        fmt_counts[ext] = fmt_counts.get(ext, 0) + 1
+        try:
+            total_bytes += os.path.getsize(item.get("fullPath", ""))
+        except Exception:
+            pass
+    total_mb = total_bytes / (1024 * 1024)
+    size_str = f"{total_mb:.1f} MB" if total_mb >= 1 else f"{total_bytes / 1024:.1f} KB"
+    fmt_str = "; ".join(f"{count} {fmt}" for fmt, count in sorted(fmt_counts.items()))
+    n = len(rows)
+    return f"{n} item{'s' if n != 1 else ''}: {fmt_str} ({size_str} total)"
+
 def generate_checksum(file_path, block_size=65536):
     sha256 = hashlib.sha256()
 
@@ -606,10 +623,16 @@ if clearMasterFilesVar.get():
                 print(f"Cleared scan warnings: {f}")
             except Exception as e:
                 print(f"Could not delete {f}: {e}")
-        if f.startswith("digital_asset_inventory_atom_") and f.endswith(".csv"):
+        if (f.startswith("digital_asset_inventory_atom_") or f.startswith("atom_import_")) and f.endswith(".csv"):
             try:
                 os.remove(os.path.join(output_folder, f))
-                print(f"Cleared AtoM import file: {f}")
+                print(f"Cleared AtoM file: {f}")
+            except Exception as e:
+                print(f"Could not delete {f}: {e}")
+        if f.startswith("preservation_audit_atom_") and f.endswith(".csv"):
+            try:
+                os.remove(os.path.join(output_folder, f))
+                print(f"Cleared AtoM audit file: {f}")
             except Exception as e:
                 print(f"Could not delete {f}: {e}")
 
@@ -622,6 +645,15 @@ if previous_la_files:
     master_df = pd.read_csv(os.path.join(output_folder, previous_la_files[0]))
 else:
     master_df = pd.DataFrame()
+
+previous_atom_files = sorted(
+    [f for f in os.listdir(output_folder) if f.startswith("digital_asset_inventory_atom_") and f.endswith(".csv")],
+    reverse=True
+)
+if previous_atom_files:
+    atom_master_df = pd.read_csv(os.path.join(output_folder, previous_atom_files[0]))
+else:
+    atom_master_df = pd.DataFrame()
 
 # ==================================================
 # Progress window
@@ -748,7 +780,7 @@ for cat in categories:
                             f"Metadata file for {inst}_{coll}" if scanMode == "Single Collection"
                             else f"Metadata file for {inst}" if scanMode == "All Collections (selected institution)"
                             else "Metadata file for all collections held by NSCF partner institutions"
-                        ) + f" [{len(subset_rows)} assets captured]",
+                        ) + f" [{build_extent_summary(subset_rows)}]",
                         "created":       now_ts,
                         "creator":       meta.get("creator", ""),
                         "contributor":   meta.get("contributor", ""),
@@ -810,19 +842,7 @@ for cat in categories:
                     parent_row["repository"] = inst_name
 
                 # Build extentAndMedium summary from child items
-                fmt_counts = {}
-                total_bytes = 0
-                for item in subset_rows:
-                    ext = item.get("format", "").split("/")[-1].upper() or "FILE"
-                    fmt_counts[ext] = fmt_counts.get(ext, 0) + 1
-                    try:
-                        total_bytes += os.path.getsize(item.get("fullPath", ""))
-                    except Exception:
-                        pass
-                total_mb = total_bytes / (1024 * 1024)
-                size_str = f"{total_mb:.1f} MB" if total_mb >= 1 else f"{total_bytes / 1024:.1f} KB"
-                fmt_str = "; ".join(f"{count} {fmt}" for fmt, count in sorted(fmt_counts.items()))
-                parent_row["extentAndMedium"] = f"{len(subset_rows)} item{'s' if len(subset_rows) != 1 else ''}: {fmt_str} ({size_str} total)"
+                parent_row["extentAndMedium"] = build_extent_summary(subset_rows)
 
                 atom_rows.append(parent_row)
 
@@ -1078,8 +1098,6 @@ def run_preservation_audit(master_df, atom_df=None):
             for source, target in allowed_pairs:
                 source_df = atom_items[atom_items["scanType"] == source]
                 target_df = atom_items[atom_items["scanType"] == target]
-                if source_df.empty and target_df.empty:
-                    continue
 
                 source_index = dict(zip(source_df["relativePath"], source_df["checksumSHA256"]))
                 target_index = dict(zip(target_df["relativePath"], target_df["checksumSHA256"]))
@@ -1146,11 +1164,6 @@ if output_choice in ("Excel only", "Both"):
     print(f"Processing complete. Master Excel updated: {master_xlsx}")
 
 # ==================================================
-# Run preservation audit
-# ==================================================
-audit_path = run_preservation_audit(updated_master_df, atom_rows)
-
-# ==================================================
 # Write scan warning log
 # ==================================================
 if scan_warnings:
@@ -1161,13 +1174,35 @@ else:
     print("Scan completed with no warnings.")
 
 # ==================================================
-# Write AtoM CSV
+# Accumulate AtoM master (same pattern as LA)
 # ==================================================
 atom_csv = None
 if atom_rows:
+    new_atom_df = pd.DataFrame(atom_rows, columns=ATOM_OUTPUT_COLUMNS)
+    updated_atom_df = pd.concat([atom_master_df, new_atom_df], ignore_index=True)
+    # Deduplicate: use digitalObjectPath+scanType for items, legacyId for parents
+    if "digitalObjectPath" in updated_atom_df.columns and "scanType" in updated_atom_df.columns:
+        updated_atom_df = updated_atom_df.reset_index(drop=True)
+        item_mask = updated_atom_df["levelOfDescription"] == "Item"
+        parent_mask = ~item_mask
+        items_deduped = updated_atom_df[item_mask].drop_duplicates(subset=["digitalObjectPath", "scanType"], keep="last")
+        parents_deduped = updated_atom_df[parent_mask].drop_duplicates(subset=["legacyId"], keep="last")
+        # Rebuild interleaved order: parent then its items, in original row order
+        all_deduped = pd.concat([parents_deduped, items_deduped]).sort_index()
+        updated_atom_df = all_deduped.reset_index(drop=True)
     atom_csv = os.path.join(rootFolder, "DAMSG_output", f"digital_asset_inventory_atom_{RUN_TIMESTAMP}.csv")
-    pd.DataFrame(atom_rows, columns=ATOM_COLUMNS).to_csv(atom_csv, index=False)
-    print(f"AtoM import CSV written ({len(atom_rows)} rows): {atom_csv}")
+    updated_atom_df.to_csv(atom_csv, index=False)
+    print(f"AtoM master CSV written ({len(updated_atom_df)} rows): {atom_csv}")
+else:
+    updated_atom_df = atom_master_df
+
+# ==================================================
+# Run preservation audit
+# ==================================================
+audit_path = run_preservation_audit(
+    updated_master_df,
+    updated_atom_df.to_dict("records") if not updated_atom_df.empty else None
+)
 
 # ==================================================
 # Optionally, open files automatically
