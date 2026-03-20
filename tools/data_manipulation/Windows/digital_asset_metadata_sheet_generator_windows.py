@@ -32,7 +32,7 @@ CATEGORY_TARGETS = {
 # AtoM CSV column order (matches master_atom sheet)
 # ==================================================
 ATOM_COLUMNS = [
-    "Issues and Notes", "legacyId", "parentId", "qubitParentSlug", "accessionNumber",
+    "legacyId", "parentId", "qubitParentSlug", "accessionNumber",
     "identifier", "title", "levelOfDescription", "extentAndMedium", "repository",
     "archivalHistory", "acquisition", "scopeAndContent", "appraisal", "accruals",
     "arrangement", "accessConditions", "reproductionConditions", "language", "script",
@@ -69,7 +69,8 @@ RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 # ==================================================
 INSTITUTION_CODE_MAP = {
     "ISAM": "Iziko Museum of South Africa",
-    "DNMNH": "Ditsong National Museum of Natural History"
+    "DNMNH": "Ditsong National Museum of Natural History",
+    "ARC" : "Agricultural Research Council"
 }
 
 # ==================================================
@@ -340,12 +341,19 @@ def loadGoogleSheets():
         mappingDF     = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master"))
         atomMappingDF = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master_atom"))
 
-        # Build institution name map dynamically from the sheet
+        # Build institution name map dynamically from both sheets
         global INSTITUTION_CODE_MAP
         INSTITUTION_CODE_MAP = dict(zip(
             mappingDF["institutionCode"].dropna(),
             mappingDF["holdingInstitution"].dropna()
         ))
+        # Supplement with AtoM-only institutions (institutionCode → repository)
+        if "institutionCode" in atomMappingDF.columns and "repository" in atomMappingDF.columns:
+            for _, row in atomMappingDF.dropna(subset=["institutionCode", "repository"]).iterrows():
+                code = str(row["institutionCode"]).strip()
+                name = str(row["repository"]).strip()
+                if code and code not in INSTITUTION_CODE_MAP:
+                    INSTITUTION_CODE_MAP[code] = name
         updateInstitutionOptions()
         updateCollectionOptions()
         updateScanModeUI()
@@ -471,7 +479,7 @@ extensions = tuple(fileTypes[fileFilterVar.get()])
 all_rows = []
 atom_rows = []
 
-def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
+def scan_collection(categoryRoot, institutionCode, collectionCode, meta, atom_meta=None):
     collectionRoot = os.path.join(rootFolder, categoryRoot, institutionCode, collectionCode)
     if not os.path.isdir(collectionRoot):
         return []
@@ -509,7 +517,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                         institutionCode=institutionCode
                     )
                 else:
-                    description_text = meta.get("description", collectionCode)
+                    description_text = meta.get("description", collectionCode) if meta is not None else collectionCode
 
                 if fmt == ".csv":
                     doc_id = generate_metadata_document_id(institutionCode, collectionCode, categoryRoot, rel)
@@ -527,22 +535,26 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                     "title":         base,
                     "description":   description_text,
                     "created":       date_created,
-                    "creator":       meta.get("creator", ""),
-                    "contributor":   meta.get("contributor", ""),
-                    "publisher":     meta.get("publisher", ""),
+                    "creator":       meta.get("creator", "") if meta is not None else "",
+                    "contributor":   meta.get("contributor", "") if meta is not None else "",
+                    "publisher":     meta.get("publisher", "") if meta is not None else "",
                     "audience":      AUDIENCE_MAP.get(categoryRoot.lower(), AUDIENCE_FALLBACK),
-                    "source":        meta.get("source", ""),
-                    "license":       meta.get("license", ""),
-                    "rightsHolder":  meta.get("rightsHolder", ""),
+                    "source":        meta.get("source", "") if meta is not None else "",
+                    "license":       meta.get("license", "") if meta is not None else "",
+                    "rightsHolder":  meta.get("rightsHolder", "") if meta is not None else "",
                     "references":    "",  # placeholder — URI to occurrence record, future field
                     # --- System / archival fields ---
                     "scanType":        scanType,
                     "documentId":      doc_id,
                     "institutionCode": institutionCode,
                     "collectionCode":  collectionCode,
-                    "institutionName": INSTITUTION_CODE_MAP.get(institutionCode, institutionCode),
+                    "institutionName":    INSTITUTION_CODE_MAP.get(institutionCode, institutionCode),
+                    "holdingInstitution": (
+                        meta.get("holdingInstitution", "") if meta is not None
+                        else (atom_meta.get("repository", "") if atom_meta is not None and len(atom_meta) > 0 else INSTITUTION_CODE_MAP.get(institutionCode, institutionCode))
+                    ),
                     "additionalNames": "",
-                    "subject":         "Metadata" if fmt == ".csv" else meta.get("subject", ""),
+                    "subject":         "Metadata" if fmt == ".csv" else (meta.get("subject", "") if meta is not None else ""),
                     "fileName":        f,
                     "fullPath":        full,
                     "relativePath":    rel,
@@ -554,9 +566,10 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
                 }
 
                 # Add ALL mapping columns automatically
-                for col in mappingDF.columns:
-                    if col not in row_data or (col == "additionalNames" and not row_data["additionalNames"].strip()):
-                        row_data[col] = meta.get(col, "")
+                if meta is not None and mappingDF is not None:
+                    for col in mappingDF.columns:
+                        if col not in row_data or (col == "additionalNames" and not row_data["additionalNames"].strip()):
+                            row_data[col] = meta.get(col, "")
 
                 rows.append(row_data)   
 
@@ -653,10 +666,12 @@ for cat in categories:
             if scanMode == "All Collections (selected institution)" and inst != institution:
                 continue
 
-            try:
-                meta = mappingDF[(mappingDF["institutionCode"] == inst) & (mappingDF["collectionCode"] == coll)].iloc[0]
-            except IndexError:
+            targets = CATEGORY_TARGETS.get(cat, [])
+            la_rows = mappingDF[(mappingDF["institutionCode"] == inst) & (mappingDF["collectionCode"] == coll)] if mappingDF is not None else pd.DataFrame()
+            if "LA" in targets and la_rows.empty:
+                print(f"Skipping {inst}/{coll} — no LA mapping found")
                 continue
+            meta = la_rows.iloc[0] if not la_rows.empty else None
 
             if clearPreviousMetadataVar.get():
                 meta_folder_pre = os.path.join(inst_path, coll, "metadata")
@@ -668,7 +683,17 @@ for cat in categories:
                             except Exception as e:
                                 print(f"Could not delete {old_file}: {e}")
 
-            all_rows.extend(scan_collection(cat, inst, coll, meta))
+            # Look up AtoM mapping row early so scan_collection can use it
+            atom_meta_pre = {}
+            if atomMappingDF is not None and "institutionCode" in atomMappingDF.columns and "collectionCode" in atomMappingDF.columns:
+                atom_rows_match = atomMappingDF[
+                    (atomMappingDF["institutionCode"] == inst) &
+                    (atomMappingDF["collectionCode"] == coll)
+                ]
+                if not atom_rows_match.empty:
+                    atom_meta_pre = atom_rows_match.iloc[0]
+
+            all_rows.extend(scan_collection(cat, inst, coll, meta, atom_meta_pre))
 
             subset_rows = [
                 r for r in all_rows
@@ -706,50 +731,49 @@ for cat in categories:
                 print(f"Collection metadata CSV generated: {subset_path}")
 
                 now_ts = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
-                row_data = {
-                    # DwC Simple Multimedia Extension standard fields
-                    "identifier":    "",
-                    "type":          "Text",
-                    "format":        "text/csv",
-                    "title":         os.path.splitext(os.path.basename(subset_path))[0],
-                    "description":   (
-                        f"Metadata file for {inst}_{coll}" if scanMode == "Single Collection"
-                        else f"Metadata file for {inst}" if scanMode == "All Collections (selected institution)"
-                        else "Metadata file for all collections held by NSCF partner institutions"
-                    ) + f" [{len(subset_rows)} assets captured]",
-                    "created":       now_ts,
-                    "creator":       meta.get("creator", ""),
-                    "contributor":   meta.get("contributor", ""),
-                    "publisher":     meta.get("publisher", ""),
-                    "audience":      "Data curators; Collection managers",
-                    "source":        f"Original digital assets — {inst}_{coll} ({cat})",
-                    "license":       meta.get("license", ""),
-                    "rightsHolder":  meta.get("rightsHolder", ""),
-                    "references":    "",
-                    # System / archival fields
-                    "fileName":          os.path.basename(subset_path),
-                    "scanType":          scanType,
-                    "documentId":        generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
-                    "institutionCode":   inst,
-                    "collectionCode":    coll,
-                    "institutionName":   INSTITUTION_CODE_MAP.get(inst, inst),
-                    "holdingInstitution": meta.get("holdingInstitution", ""),
-                    "dateCreated":       now_ts,
-                    "subject":           "Metadata",
-                    "fullPath":          subset_path,
-                    "relativePath":      os.path.relpath(subset_path, rootFolder),
-                    "assetCategory":     f"{cat}_metadata",
-                    "scanModeApplied":   scanMode,
-                    "additionalNames":   "",
-                    "checksumSHA256":    generate_checksum(subset_path),
-                }
-
-                # Add ALL mapping columns automatically (same as scan_collection)
-                for col in mappingDF.columns:
-                    if col not in row_data or (col == "additionalNames" and not row_data["additionalNames"].strip()):
-                        row_data[col] = meta.get(col, "")
-
-                all_rows.append(row_data)
+                if meta is not None:
+                    row_data = {
+                        # DwC Simple Multimedia Extension standard fields
+                        "identifier":    "",
+                        "type":          "Text",
+                        "format":        "text/csv",
+                        "title":         os.path.splitext(os.path.basename(subset_path))[0],
+                        "description":   (
+                            f"Metadata file for {inst}_{coll}" if scanMode == "Single Collection"
+                            else f"Metadata file for {inst}" if scanMode == "All Collections (selected institution)"
+                            else "Metadata file for all collections held by NSCF partner institutions"
+                        ) + f" [{len(subset_rows)} assets captured]",
+                        "created":       now_ts,
+                        "creator":       meta.get("creator", ""),
+                        "contributor":   meta.get("contributor", ""),
+                        "publisher":     meta.get("publisher", ""),
+                        "audience":      "Data curators; Collection managers",
+                        "source":        f"Original digital assets — {inst}_{coll} ({cat})",
+                        "license":       meta.get("license", ""),
+                        "rightsHolder":  meta.get("rightsHolder", ""),
+                        "references":    "",
+                        # System / archival fields
+                        "fileName":          os.path.basename(subset_path),
+                        "scanType":          scanType,
+                        "documentId":        generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
+                        "institutionCode":   inst,
+                        "collectionCode":    coll,
+                        "institutionName":   INSTITUTION_CODE_MAP.get(inst, inst),
+                        "holdingInstitution": meta.get("holdingInstitution", ""),
+                        "dateCreated":       now_ts,
+                        "subject":           "Metadata",
+                        "fullPath":          subset_path,
+                        "relativePath":      os.path.relpath(subset_path, rootFolder),
+                        "assetCategory":     f"{cat}_metadata",
+                        "scanModeApplied":   scanMode,
+                        "additionalNames":   "",
+                        "checksumSHA256":    generate_checksum(subset_path),
+                    }
+                    # Add ALL mapping columns automatically (same as scan_collection)
+                    for col in mappingDF.columns:
+                        if col not in row_data or (col == "additionalNames" and not row_data["additionalNames"].strip()):
+                            row_data[col] = meta.get(col, "")
+                    all_rows.append(row_data)
 
             # --------------------------------------------------
             # AtoM output — generate parent + item rows
@@ -772,11 +796,12 @@ for cat in categories:
                 parent_row["legacyId"]           = parent_legacy_id
                 parent_row["title"]              = atom_meta.get("title", f"{inst} {coll}")
                 parent_row["levelOfDescription"] = atom_meta.get("levelOfDescription", "Collection")
-                parent_row["repository"]         = inst_name
                 parent_row["institutionIdentifier"] = inst
                 for col in ATOM_COLUMNS:
                     if col in atom_meta and not parent_row[col]:
                         parent_row[col] = atom_meta.get(col, "")
+                if not parent_row["repository"]:
+                    parent_row["repository"] = inst_name
                 atom_rows.append(parent_row)
 
                 # Item rows — one per scanned file in this collection
@@ -786,7 +811,7 @@ for cat in categories:
                     item_row["identifier"]          = item.get("documentId", "").replace(" ", "_")
                     item_row["title"]               = item.get("title", "")
                     item_row["levelOfDescription"]  = "Item"
-                    item_row["repository"]          = inst_name
+                    item_row["repository"]          = atom_meta.get("repository", "") or inst_name
                     item_row["institutionIdentifier"] = inst
                     item_row["digitalObjectPath"]   = item.get("relativePath", "")
                     item_row["eventDates"]          = item.get("dateCreated", "")
@@ -1043,7 +1068,7 @@ else:
 # ==================================================
 atom_csv = None
 if atom_rows:
-    atom_csv = os.path.join(rootFolder, "DAMSG_output", f"digitial_asset_inventory_atom_{RUN_TIMESTAMP}.csv")
+    atom_csv = os.path.join(rootFolder, "DAMSG_output", f"atom_import_{RUN_TIMESTAMP}.csv")
     pd.DataFrame(atom_rows, columns=ATOM_COLUMNS).to_csv(atom_csv, index=False)
     print(f"AtoM import CSV written ({len(atom_rows)} rows): {atom_csv}")
 
