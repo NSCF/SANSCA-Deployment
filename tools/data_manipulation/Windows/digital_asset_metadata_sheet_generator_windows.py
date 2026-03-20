@@ -594,7 +594,7 @@ if clearMasterFilesVar.get():
             except Exception as e:
                 print(f"Could not delete {f}: {e}")
     for f in os.listdir(output_folder):
-        if f.startswith("preservation_audit_") and f.endswith(".csv"):
+        if f.startswith("preservation_audit_la_") and f.endswith(".csv"):
             try:
                 os.remove(os.path.join(output_folder, f))
                 print(f"Cleared audit file: {f}")
@@ -968,7 +968,8 @@ def run_preservation_audit(master_df, atom_df=None):
     audit_folder = os.path.join(rootFolder, "DAMSG_output")
     os.makedirs(audit_folder, exist_ok=True)
 
-    audit_base = os.path.join(audit_folder, f"preservation_audit_{RUN_TIMESTAMP}")
+    audit_base      = os.path.join(audit_folder, f"preservation_audit_la_{RUN_TIMESTAMP}")
+    atom_audit_base = os.path.join(audit_folder, f"preservation_audit_atom_{RUN_TIMESTAMP}")
 
     # Only evaluate real files (skip .csv metadata)
     df = master_df[master_df["format"] != "text/csv"].copy()
@@ -1105,13 +1106,13 @@ def run_preservation_audit(master_df, atom_df=None):
     if not duplicates_df.empty:
         duplicates_df.to_csv(f"{audit_base}_duplicates.csv", index=False)
     if atom_summary_rows:
-        pd.DataFrame(atom_summary_rows).to_csv(f"{audit_base}_atom_summary.csv", index=False)
+        pd.DataFrame(atom_summary_rows).to_csv(f"{atom_audit_base}_summary.csv", index=False)
     if atom_missing_rows:
-        pd.DataFrame(atom_missing_rows).to_csv(f"{audit_base}_atom_missing.csv", index=False)
+        pd.DataFrame(atom_missing_rows).to_csv(f"{atom_audit_base}_missing.csv", index=False)
     if atom_mismatch_rows:
-        pd.DataFrame(atom_mismatch_rows).to_csv(f"{audit_base}_atom_mismatch.csv", index=False)
+        pd.DataFrame(atom_mismatch_rows).to_csv(f"{atom_audit_base}_mismatch.csv", index=False)
     if atom_duplicate_rows:
-        pd.DataFrame(atom_duplicate_rows).to_csv(f"{audit_base}_atom_duplicates.csv", index=False)
+        pd.DataFrame(atom_duplicate_rows).to_csv(f"{atom_audit_base}_duplicates.csv", index=False)
 
     print(f"Preservation audit report created: {audit_file}")
 
@@ -1167,11 +1168,9 @@ def open_file(filepath):
     except Exception as e:
         print(f"Could not open {filepath}: {e}")
 
-if outputChoiceVar.get() in ("Both","CSV only"):
-    open_file(master_csv)
-if outputChoiceVar.get() in ("Both","Excel only"):
+damsg_output_folder = os.path.join(rootFolder, "DAMSG_output")
+for f in sorted(os.listdir(damsg_output_folder)):
+    if f.endswith(".csv"):
+        open_file(os.path.join(damsg_output_folder, f))
+if outputChoiceVar.get() in ("Both", "Excel only"):
     open_file(master_xlsx)
-
-open_file(audit_path)
-if atom_csv:
-    open_file(atom_csv)
