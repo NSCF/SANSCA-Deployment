@@ -693,14 +693,17 @@ for cat in categories:
                 if not atom_rows_match.empty:
                     atom_meta_pre = atom_rows_match.iloc[0]
 
-            all_rows.extend(scan_collection(cat, inst, coll, meta, atom_meta_pre))
+            scanned = scan_collection(cat, inst, coll, meta, atom_meta_pre)
+
+            la_only = "LA" in targets
+            atom_only = targets == ["AtoM"]
+
+            if la_only or not atom_only:
+                all_rows.extend(scanned)
 
             subset_rows = [
-                r for r in all_rows
+                r for r in scanned
                     if (
-                        r["institutionCode"] == inst and
-                        r["collectionCode"] == coll and
-                        r["assetCategory"] == cat and
                         r["format"] != "text/csv" and
                         r["scanType"] == scanType
                     )
