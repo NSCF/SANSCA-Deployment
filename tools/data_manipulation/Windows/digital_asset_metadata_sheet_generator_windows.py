@@ -238,9 +238,9 @@ def getDateCreated(path):
 # ==================================================
 def generate_document_id(institution_code,collection_code, base_name, relative_path, length=8):
     relative_path = relative_path.replace("\\", "/")
-    clean_inst = institution_code.replace("_", "")
-    clean_collection = collection_code.replace("_", "")
-    clean_base = base_name.replace("_", "")
+    clean_inst = institution_code.replace("_", "").replace(" ", "")
+    clean_collection = collection_code.replace("_", "").replace(" ", "")
+    clean_base = base_name.replace("_", "").replace(" ", "")
     h = hashlib.sha1(relative_path.encode("utf-8")).hexdigest()[:length]
     return f"{clean_inst}{clean_collection}{clean_base}{h}"
 
@@ -565,19 +565,19 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta):
 # ==================================================
 # Master file paths
 # ==================================================
-master_csv = os.path.join(rootFolder, "DAMSG_output", "digital_asset_inventory_master.csv")
-master_xlsx = os.path.join(rootFolder, "DAMSG_output", "digital_asset_inventory_master.xlsx")
+master_csv = os.path.join(rootFolder, "DAMSG_output", f"digital_asset_inventory_la_{RUN_TIMESTAMP}.csv")
+master_xlsx = os.path.join(rootFolder, "DAMSG_output", f"digital_asset_inventory_la_{RUN_TIMESTAMP}.xlsx")
 os.makedirs(os.path.dirname(master_csv), exist_ok=True)
 
 if clearMasterFilesVar.get():
     output_folder = os.path.dirname(master_csv)
-    for master_file in (master_csv, master_xlsx):
-        if os.path.isfile(master_file):
+    for f in os.listdir(output_folder):
+        if f.startswith("digital_asset_inventory_la_") and f.endswith((".csv", ".xlsx")):
             try:
-                os.remove(master_file)
-                print(f"Cleared master file: {master_file}")
+                os.remove(os.path.join(output_folder, f))
+                print(f"Cleared master file: {f}")
             except Exception as e:
-                print(f"Could not delete {master_file}: {e}")
+                print(f"Could not delete {f}: {e}")
     for f in os.listdir(output_folder):
         if f.startswith("preservation_audit_") and f.endswith(".csv"):
             try:
@@ -598,8 +598,13 @@ if clearMasterFilesVar.get():
             except Exception as e:
                 print(f"Could not delete {f}: {e}")
 
-if os.path.isfile(master_csv):
-    master_df = pd.read_csv(master_csv)
+output_folder = os.path.dirname(master_csv)
+previous_la_files = sorted(
+    [f for f in os.listdir(output_folder) if f.startswith("digital_asset_inventory_la_") and f.endswith(".csv")],
+    reverse=True
+)
+if previous_la_files:
+    master_df = pd.read_csv(os.path.join(output_folder, previous_la_files[0]))
 else:
     master_df = pd.DataFrame()
 
@@ -778,7 +783,7 @@ for cat in categories:
                 for item in subset_rows:
                     item_row = {col: "" for col in ATOM_COLUMNS}
                     item_row["parentId"]            = parent_legacy_id
-                    item_row["identifier"]          = item.get("documentId", "")
+                    item_row["identifier"]          = item.get("documentId", "").replace(" ", "_")
                     item_row["title"]               = item.get("title", "")
                     item_row["levelOfDescription"]  = "Item"
                     item_row["repository"]          = inst_name
@@ -1034,11 +1039,11 @@ else:
     print("Scan completed with no warnings.")
 
 # ==================================================
-# Write AtoM import CSV
+# Write AtoM CSV
 # ==================================================
 atom_csv = None
 if atom_rows:
-    atom_csv = os.path.join(rootFolder, "DAMSG_output", f"atom_import_{RUN_TIMESTAMP}.csv")
+    atom_csv = os.path.join(rootFolder, "DAMSG_output", f"digitial_asset_inventory_atom_{RUN_TIMESTAMP}.csv")
     pd.DataFrame(atom_rows, columns=ATOM_COLUMNS).to_csv(atom_csv, index=False)
     print(f"AtoM import CSV written ({len(atom_rows)} rows): {atom_csv}")
 
