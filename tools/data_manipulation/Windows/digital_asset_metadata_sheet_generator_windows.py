@@ -755,7 +755,7 @@ for cat in categories:
                         f.write(f"scanDate,{scanDateHuman}\n")
                         f.write(f"institutionCode,{inst}\n")
                         f.write(f"collectionCode,{coll}\n\n")
-                        df.to_csv(f, index=False)
+                        df.to_csv(f, index=False, lineterminator='\n')
                     print(f"Collection metadata CSV generated: {path}")
 
                 # LA format CSV
@@ -887,7 +887,7 @@ for cat in categories:
                             f.write(f"scanDate,{scanDateHuman}\n")
                             f.write(f"institutionCode,{inst}\n")
                             f.write(f"collectionCode,{coll}\n\n")
-                            pd.DataFrame(atom_subset_rows, columns=ATOM_OUTPUT_COLUMNS).to_csv(f, index=False)
+                            pd.DataFrame(atom_subset_rows, columns=ATOM_OUTPUT_COLUMNS).to_csv(f, index=False, lineterminator='\n')
                         print(f"Collection metadata CSV generated: {atom_subset_path}")
 
 
@@ -1131,22 +1131,22 @@ def run_preservation_audit(master_df, atom_df=None):
 
     # Write CSVs — one per section, only if non-empty
     audit_file = f"{audit_base}_summary.csv"
-    summary_df.to_csv(audit_file, index=False)
+    summary_df.to_csv(audit_file, index=False, encoding='utf-8', lineterminator='\n')
 
     if not missing_df.empty:
-        missing_df.to_csv(f"{audit_base}_missing.csv", index=False)
+        missing_df.to_csv(f"{audit_base}_missing.csv", index=False, encoding='utf-8', lineterminator='\n')
     if not mismatch_df.empty:
-        mismatch_df.to_csv(f"{audit_base}_mismatch.csv", index=False)
+        mismatch_df.to_csv(f"{audit_base}_mismatch.csv", index=False, encoding='utf-8', lineterminator='\n')
     if not duplicates_df.empty:
-        duplicates_df.to_csv(f"{audit_base}_duplicates.csv", index=False)
+        duplicates_df.to_csv(f"{audit_base}_duplicates.csv", index=False, encoding='utf-8', lineterminator='\n')
     if atom_summary_rows:
-        pd.DataFrame(atom_summary_rows).to_csv(f"{atom_audit_base}_summary.csv", index=False)
+        pd.DataFrame(atom_summary_rows).to_csv(f"{atom_audit_base}_summary.csv", index=False, encoding='utf-8', lineterminator='\n')
     if atom_missing_rows:
-        pd.DataFrame(atom_missing_rows).to_csv(f"{atom_audit_base}_missing.csv", index=False)
+        pd.DataFrame(atom_missing_rows).to_csv(f"{atom_audit_base}_missing.csv", index=False, encoding='utf-8', lineterminator='\n')
     if atom_mismatch_rows:
-        pd.DataFrame(atom_mismatch_rows).to_csv(f"{atom_audit_base}_mismatch.csv", index=False)
+        pd.DataFrame(atom_mismatch_rows).to_csv(f"{atom_audit_base}_mismatch.csv", index=False, encoding='utf-8', lineterminator='\n')
     if atom_duplicate_rows:
-        pd.DataFrame(atom_duplicate_rows).to_csv(f"{atom_audit_base}_duplicates.csv", index=False)
+        pd.DataFrame(atom_duplicate_rows).to_csv(f"{atom_audit_base}_duplicates.csv", index=False, encoding='utf-8', lineterminator='\n')
 
     print(f"Preservation audit report created: {audit_file}")
 
@@ -1157,10 +1157,10 @@ def run_preservation_audit(master_df, atom_df=None):
 # ==================================================
 output_choice = outputChoiceVar.get()
 if output_choice in ("CSV only", "Both"):
-    updated_master_df.to_csv(master_csv, index=False)
+    updated_master_df.to_csv(master_csv, index=False, encoding='utf-8', lineterminator='\n')
     print(f"Processing complete. Master CSV updated: {master_csv}")
 if output_choice in ("Excel only", "Both"):
-    updated_master_df.to_excel(master_xlsx, index=False)
+    updated_master_df.to_excel(master_xlsx, index=False, encoding='utf-8', lineterminator='\n')
     print(f"Processing complete. Master Excel updated: {master_xlsx}")
 
 # ==================================================
@@ -1168,7 +1168,7 @@ if output_choice in ("Excel only", "Both"):
 # ==================================================
 if scan_warnings:
     log_path = os.path.join(rootFolder, "DAMSG_output", f"scan_warnings_{RUN_TIMESTAMP}.csv")
-    pd.DataFrame(scan_warnings).to_csv(log_path, index=False)
+    pd.DataFrame(scan_warnings).to_csv(log_path, index=False, encoding='utf-8', lineterminator='\n')
     print(f"Scan warnings written ({len(scan_warnings)} issues): {log_path}")
 else:
     print("Scan completed with no warnings.")
@@ -1191,7 +1191,7 @@ if atom_rows:
         all_deduped = pd.concat([parents_deduped, items_deduped]).sort_index()
         updated_atom_df = all_deduped.reset_index(drop=True)
     atom_csv = os.path.join(rootFolder, "DAMSG_output", f"digital_asset_inventory_atom_{RUN_TIMESTAMP}.csv")
-    updated_atom_df.to_csv(atom_csv, index=False)
+    updated_atom_df.to_csv(atom_csv, index=False, encoding='utf-8', lineterminator='\n')
     print(f"AtoM master CSV written ({len(updated_atom_df)} rows): {atom_csv}")
 else:
     updated_atom_df = atom_master_df
