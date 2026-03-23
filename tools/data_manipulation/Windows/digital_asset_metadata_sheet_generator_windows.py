@@ -357,8 +357,8 @@ def loadGoogleSheets():
     try:
         sheetStatusLabel.config(text="Connecting…", fg="gray")
         root.update()
-        mappingDF     = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master"))
-        atomMappingDF = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master_atom"))
+        mappingDF     = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master_la_collections"))
+        atomMappingDF = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master_atom_collections"))
 
         # Build institution name map dynamically from both sheets
         global INSTITUTION_CODE_MAP
