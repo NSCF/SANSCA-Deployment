@@ -799,6 +799,34 @@ categories = [
     and d not in EXCLUDED_ROOT_FOLDERS
 ]
 
+# ==================================================
+# Pre-scan mapping check
+# ==================================================
+unmapped = []
+for cat in categories:
+    cat_path = os.path.join(rootFolder, cat)
+    if not os.path.isdir(cat_path):
+        continue
+    targets = CATEGORY_TARGETS.get(cat, [])
+    for inst in [d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path, d))]:
+        for coll in [d for d in os.listdir(os.path.join(cat_path, inst)) if os.path.isdir(os.path.join(cat_path, inst, d))]:
+            if scanMode == "Single Collection" and (inst != institution or coll != collection):
+                continue
+            if scanMode == "All Collections (selected institution)" and inst != institution:
+                continue
+            if "LA" in targets and mappingDF is not None:
+                if mappingDF[(mappingDF["institutionCode"] == inst) & (mappingDF["collectionCode"] == coll)].empty:
+                    unmapped.append(f"[LA] {cat}/{inst}/{coll}")
+            if "AtoM" in targets and atomMappingDF is not None and "institutionCode" in atomMappingDF.columns:
+                if atomMappingDF[(atomMappingDF["institutionCode"] == inst) & (atomMappingDF["collectionCode"] == coll)].empty:
+                    unmapped.append(f"[AtoM] {cat}/{inst}/{coll}")
+
+if unmapped:
+    msg = "The following collections have no mapping entry and will be skipped:\n\n" + "\n".join(unmapped)
+    msg += "\n\nContinue anyway?"
+    if not messagebox.askyesno("Missing Mappings", msg):
+        sys.exit(0)
+
 for cat in categories:
     cat_path = os.path.join(rootFolder, cat)
     if not os.path.isdir(cat_path):
@@ -1291,6 +1319,7 @@ else:
 # Accumulate AtoM master (same pattern as LA)
 # ==================================================
 atom_csv = None
+updated_atom_df = atom_master_df.copy() if not atom_master_df.empty else pd.DataFrame()
 if atom_rows:
     new_atom_df = pd.DataFrame(atom_rows, columns=ATOM_OUTPUT_COLUMNS)
     updated_atom_df = pd.concat([atom_master_df, new_atom_df], ignore_index=True)
@@ -1309,6 +1338,39 @@ if atom_rows:
     print(f"AtoM master CSV written ({len(updated_atom_df)} rows): {atom_csv}")
 else:
     updated_atom_df = atom_master_df
+
+# ==================================================
+# Mandatory field validator
+# ==================================================
+LA_REQUIRED = ["license", "rightsHolder", "creator"]
+ATOM_REQUIRED = ["title", "levelOfDescription", "repository"]
+validation_issues = []
+
+for field in LA_REQUIRED:
+    if field in updated_master_df.columns:
+        missing = updated_master_df[
+            updated_master_df[field].isna() | (updated_master_df[field].astype(str).str.strip() == "")
+        ]
+        for _, row in missing.iterrows():
+            validation_issues.append(f"[LA] {row.get('institutionCode','')} / {row.get('collectionCode','')} — missing '{field}' on {row.get('fileName','')}")
+
+if not updated_atom_df.empty and "levelOfDescription" in updated_atom_df.columns:
+    atom_items_check = updated_atom_df[updated_atom_df["levelOfDescription"] == "Item"]
+    for field in ATOM_REQUIRED:
+        if field in updated_atom_df.columns:
+            missing = atom_items_check[
+                atom_items_check[field].isna() | (atom_items_check[field].astype(str).str.strip() == "")
+            ]
+            for _, row in missing.iterrows():
+                validation_issues.append(f"[AtoM] {row.get('institutionIdentifier','')} — missing '{field}' on {row.get('digitalObjectPath','')}")
+
+if validation_issues:
+    for issue in validation_issues:
+        scan_warnings.append({"level": "WARN", "file": "", "issue": issue})
+    messagebox.showwarning(
+        "Validation Issues",
+        f"{len(validation_issues)} missing required field(s) found.\nSee scan_warnings CSV for details."
+    )
 
 # ==================================================
 # Run preservation audit
