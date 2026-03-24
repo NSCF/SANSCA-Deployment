@@ -148,20 +148,136 @@ DWC_TYPE_MAP = {
 }
 
 # ==================================================
-# View code map
+# Filename parsing — structure, view, and suffix codes (Legacy, remove eventually)
 # ==================================================
-VIEW_CODE_MAP = {
-    "cd": "Dorsal view of specimen cranium",
-    "cv": "Ventral view of specimen cranium",
-    "mrl": "Right lateral view of specimen mandible",
-    "sd": "Dorsal view of specimen skin",
-    "mo": "Occlusional view of specimen mandible",
-    "cll": "Left lateral view of specimen cranium",
-    "sv": "Ventral view of specimen skin",
-    "crl": "Right lateral view of specimen cranium",
-    "mll": "Left lateral view of specimen mandible",
-    "label": "Close-up view of specimen label"
+
+# Overrides for specific well-known codes (preserves existing descriptions)
+# VIEW_CODE_MAP = {
+#     "cd":    "Dorsal view of specimen cranium",
+#     "cv":    "Ventral view of specimen cranium",
+#     "mrl":   "Right lateral view of specimen mandible",
+#     "sd":    "Dorsal view of specimen skin",
+#     "mo":    "Occlusional view of specimen mandible",
+#     "cll":   "Left lateral view of specimen cranium",
+#     "sv":    "Ventral view of specimen skin",
+#     "crl":   "Right lateral view of specimen cranium",
+#     "mll":   "Left lateral view of specimen mandible",
+#     "label": "Close-up view of specimen label",
+# }
+VIEW_CODE_MAP = {}  # Replaced by parse_filename_description()
+
+STRUCTURE_NAMES = {
+    "H": "head",
+    "S": "skin",
+    "L": "skull",
+    "C": "cranium",
+    "M": "mandible",
+    "P": "postcranium",
+    "B": "long bones",
+    "K": "skeleton",
+    "W": "whole specimen",
 }
+
+VIEW_NAMES = {
+    "L": "lateral",
+    "D": "dorsal",
+    "V": "ventral",
+    "O": "occlusional",
+    "C": "occipital",
+    "A": "anterior",
+    "P": "posterior",
+    "S": "distal",
+    "M": "medial",
+}
+
+VIEW_STEMS = {
+    "D": "dorso", "V": "ventro", "A": "antero", "P": "postero",
+    "M": "medio",  "L": "latero", "C": "occipito", "S": "disto",
+}
+
+SIDE_NAMES = {"L": "left", "R": "right"}
+
+
+def _decode_view(view_chars):
+    v = view_chars.upper()
+    if not v or v == "U":
+        return ""
+    if len(v) == 1:
+        return VIEW_NAMES.get(v, v.lower())
+    if v[0] in SIDE_NAMES:
+        side = SIDE_NAMES[v[0]]
+        rest = v[1:]
+        if len(rest) == 1:
+            direction = VIEW_NAMES.get(rest, rest.lower())
+        else:
+            parts_list = [VIEW_STEMS.get(rest[i], VIEW_NAMES.get(rest[i], rest[i].lower()))
+                          for i in range(len(rest) - 1)]
+            parts_list.append(VIEW_NAMES.get(rest[-1], rest[-1].lower()))
+            direction = "-".join(parts_list)
+        return f"{side} {direction}"
+    else:
+        parts_list = [VIEW_STEMS.get(v[i], VIEW_NAMES.get(v[i], v[i].lower()))
+                      for i in range(len(v) - 1)]
+        parts_list.append(VIEW_NAMES.get(v[-1], v[-1].lower()))
+        return "-".join(parts_list)
+
+
+def _parse_suffixes(suffix_parts):
+    group = view_num = section = image = None
+    for part in suffix_parts:
+        p = part.upper()
+        if p.startswith("G") and p[1:].isdigit():   group    = int(p[1:])
+        elif p.startswith("V") and p[1:].isdigit(): view_num = int(p[1:])
+        elif p.startswith("S") and p[1:].isdigit(): section  = int(p[1:])
+        elif p.startswith("I") and p[1:].isdigit(): image    = int(p[1:])
+    parts_out = []
+    if group    is not None: parts_out.append(f"group {group}")
+    if view_num is not None: parts_out.append(f"view {view_num}")
+    if section  is not None: parts_out.append(f"section {section}")
+    if image    is not None: parts_out.append(f"image {image}")
+    return ", ".join(parts_out)
+
+
+def parse_filename_description(base):
+    """Parse a specimen filename stem into a human-readable description.
+
+    Examples:
+      TM1235_HV       → Ventral view of specimen head
+      TM1235_HLL      → Left lateral view of specimen head
+      TM1235_label    → Close-up view of specimen label
+      TM1234_PU       → Unspecified view of specimen postcranium
+      TM1234_PU_G1_V1 → Unspecified view of specimen postcranium; group 1, view 1
+    """
+    parts = base.split("_")
+    if len(parts) < 2:
+        return ""
+
+    sv_code      = parts[1]
+    suffix_parts = parts[2:]
+
+    if sv_code.lower() == "label":
+        return "Close-up view of specimen label"
+
+    # Check explicit override map first
+    override = VIEW_CODE_MAP.get(sv_code.lower())
+    if override:
+        suffix_desc = _parse_suffixes(suffix_parts)
+        return f"{override}; {suffix_desc}" if suffix_desc else override
+
+    sv_upper    = sv_code.upper()
+    struct_char = sv_upper[0] if sv_upper else ""
+    view_chars  = sv_upper[1:] if len(sv_upper) > 1 else ""
+
+    struct_name = STRUCTURE_NAMES.get(struct_char, struct_char.lower())
+    view_desc   = _decode_view(view_chars)
+
+    if view_desc:
+        base_desc = f"{view_desc.capitalize()} view of specimen {struct_name}"
+    else:
+        base_desc = f"Unspecified view of specimen {struct_name}"
+
+    suffix_desc = _parse_suffixes(suffix_parts)
+    return f"{base_desc}; {suffix_desc}" if suffix_desc else base_desc
 
 # ==================================================
 # Scan warning log — populated during scanning
@@ -525,11 +641,9 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta, atom_me
                 if os.path.sep + "metadata" + os.path.sep in full:
                     asset_category = f"{categoryRoot}_metadata"
 
-                parts = base.split("_")
-                view_code = parts[1] if len(parts) > 1 else ""
-                view_desc = VIEW_CODE_MAP.get(view_code.lower(), "")
-                if view_desc:
-                    description_text = view_desc
+                parsed_desc = parse_filename_description(base)
+                if parsed_desc:
+                    description_text = parsed_desc
                 elif categoryRoot.lower() in DESCRIPTION_TEMPLATE_MAP:
                     description_text = DESCRIPTION_TEMPLATE_MAP[categoryRoot.lower()].format(
                         collectionCode=collectionCode,
