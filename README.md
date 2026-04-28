@@ -16,7 +16,7 @@ We are in the process of deploying a living atlas instance for South Africa and 
 
 #### Local
 
-* Successful local deployment using [la-docker-compose](https://github.com/living-atlases/la-docker-compose) and [la-docker-images](https://github.com/living-atlases/la-docker-images)
+* Successful local deployment using [la-toolkit](https://github.com/living-atlases/la-toolkit), [la-docker-compose](https://github.com/living-atlases/la-docker-compose) and [la-docker-images](https://github.com/living-atlases/la-docker-images)
 
 ### In progress
 
