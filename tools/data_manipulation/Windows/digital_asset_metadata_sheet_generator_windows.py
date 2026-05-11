@@ -850,7 +850,7 @@ for cat in categories:
             meta = la_rows.iloc[0] if not la_rows.empty else None
 
             if clearPreviousMetadataVar.get():
-                meta_folder_pre = os.path.join(inst_path, coll, "metadata")
+                meta_folder_pre = os.path.join(rootFolder, "DAMSG_output", "metadata", inst, coll)
                 if os.path.isdir(meta_folder_pre):
                     for old_file in os.listdir(meta_folder_pre):
                         if old_file.lower().endswith(".csv"):
@@ -885,7 +885,7 @@ for cat in categories:
                     )
             ]
             if subset_rows:
-                meta_folder = os.path.join(inst_path, coll, "metadata")
+                meta_folder = os.path.join(rootFolder, "DAMSG_output", "metadata", inst, coll)
                 os.makedirs(meta_folder, exist_ok=True)
                 scanDateHuman = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1016,7 +1016,7 @@ for cat in categories:
 
                 # Write AtoM per-collection metadata CSV now that rows are generated
                 if subset_rows:
-                    meta_folder_atom = os.path.join(inst_path, coll, "metadata")
+                    meta_folder_atom = os.path.join(rootFolder, "DAMSG_output", "metadata", inst, coll)
                     os.makedirs(meta_folder_atom, exist_ok=True)
                     atom_subset_rows = [r for r in atom_rows if str(r.get("parentId", "") or "").startswith(f"{inst}_{coll}_")]
                     if atom_subset_rows:
