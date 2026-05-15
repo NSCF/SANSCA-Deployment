@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 from tkinter import (
     Tk, Canvas, Label, Button, StringVar, BooleanVar,
-    OptionMenu, Checkbutton, filedialog, messagebox, DISABLED, NORMAL
+    OptionMenu, Checkbutton, Entry, filedialog, messagebox, DISABLED, NORMAL
 )
 from PIL import Image, ExifTags, ImageTk
 import platform
@@ -48,7 +48,7 @@ ATOM_COLUMNS = [
     "eventActors", "eventActorHistories", "culture",
 ]
 # Extended columns for output files — includes audit fields not part of AtoM import
-ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType"]
+ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType", "hardDriveId"]
 
 # ==================================================
 # System files to ignore during scanning
@@ -420,6 +420,7 @@ fileFilterVar = StringVar()
 outputChoiceVar = StringVar()
 scanModeVar = StringVar()
 scanTypeVar = StringVar()
+hardDriveIdVar = StringVar()
 clearPreviousMetadataVar = BooleanVar(value=False)
 clearMasterFilesVar = BooleanVar(value=False)
 
@@ -555,6 +556,9 @@ sheetStatusLabel.pack()
 Label(root,text="Scan Type:").pack(pady=5)
 OptionMenu(root,scanTypeVar,*scanTypes).pack(fill="x", padx=20)
 
+Label(root,text="Hard Drive ID (serial number or label):").pack(pady=5)
+Entry(root,textvariable=hardDriveIdVar,font=("Arial",11)).pack(fill="x", padx=20)
+
 Label(root,text="Scan Mode:").pack(pady=5)
 OptionMenu(root,scanModeVar,*scanModes).pack(fill="x", padx=20)
 
@@ -599,6 +603,7 @@ institution = institutionVar.get()
 collection = collectionVar.get()
 scanMode = scanModeVar.get()
 scanType = scanTypeVar.get()
+hardDriveId = hardDriveIdVar.get().strip()
 
 # ==================================================
 # File scanning logic
@@ -678,6 +683,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta, atom_me
                     "references":    "",  # placeholder — URI to occurrence record, future field
                     # --- System / archival fields ---
                     "scanType":        scanType,
+                    "hardDriveId":     hardDriveId,
                     "documentId":      doc_id,
                     "institutionCode": institutionCode,
                     "collectionCode":  collectionCode,
@@ -935,6 +941,7 @@ for cat in categories:
                         # System / archival fields
                         "fileName":          os.path.basename(subset_path),
                         "scanType":          scanType,
+                        "hardDriveId":       hardDriveId,
                         "documentId":        generate_metadata_document_id(inst, coll, cat, os.path.relpath(subset_path, rootFolder)),
                         "institutionCode":   inst,
                         "collectionCode":    coll,
@@ -1012,6 +1019,7 @@ for cat in categories:
                     item_row["extentAndMedium"]     = f"1 {item.get('format', '').split('/')[-1].upper()} file"
                     item_row["checksumSHA256"]      = item.get("checksumSHA256", "")
                     item_row["scanType"]            = item.get("scanType", "")
+                    item_row["hardDriveId"]         = item.get("hardDriveId", "")
                     atom_rows.append(item_row)
 
                 # Write AtoM per-collection metadata CSV now that rows are generated
@@ -1045,7 +1053,7 @@ expected_columns = [
     "created", "creator", "contributor", "publisher",
     "audience", "source", "license", "rightsHolder", "references",
     # System / archival fields
-    "scanType", "documentId", "fileName", "relativePath", "fullPath",
+    "scanType", "hardDriveId", "documentId", "fileName", "relativePath", "fullPath",
     "assetCategory", "dateCreated", "scanModeApplied",
     "institutionCode", "collectionCode", "institutionName",
     "additionalNames", "holdingInstitution", "subject", "checksumSHA256",
@@ -1123,7 +1131,7 @@ updated_master_df = pd.concat([master_df, new_rows_df], ignore_index=True)
 # Preserve column order
 mapping_columns = [col for col in mappingDF.columns if col in updated_master_df.columns]
 system_columns = [col for col in [
-    "scanType","documentId","title","fileName","relativePath","fullPath",
+    "scanType","hardDriveId","documentId","title","fileName","relativePath","fullPath",
     "format","assetCategory","dateCreated","scanModeApplied","checksumSHA256"
 ] if col in updated_master_df.columns]
 
