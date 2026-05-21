@@ -777,7 +777,7 @@ previous_la_files = sorted(
     reverse=True
 )
 if previous_la_files:
-    master_df = pd.read_csv(os.path.join(output_folder, previous_la_files[0]))
+    master_df = pd.read_csv(os.path.join(output_folder, previous_la_files[0]), encoding='utf-8-sig')
 else:
     master_df = pd.DataFrame()
 
@@ -786,7 +786,7 @@ previous_atom_files = sorted(
     reverse=True
 )
 if previous_atom_files:
-    atom_master_df = pd.read_csv(os.path.join(output_folder, previous_atom_files[0]))
+    atom_master_df = pd.read_csv(os.path.join(output_folder, previous_atom_files[0]), encoding='utf-8-sig')
 else:
     atom_master_df = pd.DataFrame()
 
@@ -1325,7 +1325,7 @@ if output_choice in ("CSV only", "Both"):
     updated_master_df.to_csv(master_csv, index=False, encoding='utf-8-sig', lineterminator='\n')
     print(f"Processing complete. Master CSV updated: {master_csv}")
 if output_choice in ("Excel only", "Both"):
-    updated_master_df.to_excel(master_xlsx, index=False, encoding='utf-8-sig', lineterminator='\n')
+    updated_master_df.to_excel(master_xlsx, index=False)
     print(f"Processing complete. Master Excel updated: {master_xlsx}")
 
 # ==================================================
