@@ -12,6 +12,7 @@ import platform
 import sys
 import pathlib
 import hashlib
+import shutil
 
 # ==================================================
 # Google Sheets configuration
@@ -284,16 +285,9 @@ def parse_filename_description(base):
 # ==================================================
 scan_warnings = []
 
-# Detect exiftool once so we don't log a FileNotFoundError for every file
-EXIFTOOL_AVAILABLE = bool(
-    subprocess.run(
-        ["exiftool", "-ver"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    ).returncode == 0
-    if __import__("shutil").which("exiftool") else False
-)
-if not EXIFTOOL_AVAILABLE:
-    scan_warnings.append({"level": "WARN", "file": "", "issue": "exiftool not found on PATH — date extraction will fall back to filesystem ctime"})
+# Resolved after the root folder is selected — see post-UI setup below
+EXIFTOOL_PATH = None
+EXIFTOOL_AVAILABLE = False
 
 # Extensions that Pillow cannot open (non-image formats)
 PILLOW_UNSUPPORTED = (".pdf", ".csv", ".txt", ".xml", ".mp4", ".mov", ".avi", ".wav", ".mp3")
@@ -341,7 +335,7 @@ def getDateCreated(path):
     if EXIFTOOL_AVAILABLE:
         try:
             result = subprocess.run(
-                ["exiftool", "-s3",
+                [EXIFTOOL_PATH, "-s3",
                  "-DateTimeOriginal", "-CreateDate", "-DateCreated",
                  "-XMP:CreateDate", "-XMP:DateCreated", path],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
@@ -398,17 +392,6 @@ root = Tk()
 root.title("SANSCA Digital Asset Metadata Sheet Generator")
 root.geometry("850x950")
 root.resizable(False, False)
-
-if not EXIFTOOL_AVAILABLE:
-    messagebox.showwarning(
-        "exiftool not found",
-        "exiftool was not found on your PATH.\n\n"
-        "Date extraction will fall back to filesystem creation time, "
-        "which may not reflect the original capture date.\n\n"
-        "Mac:     brew install exiftool\n"
-        "Windows: download exiftool(-k).exe from exiftool.org,\n"
-        "         rename to exiftool.exe, place in C:\\Windows\\"
-    )
 
 Label(root,text="Select Root Folder and Mapping CSV",font=("Arial",12,"bold")).pack(pady=10)
 
@@ -599,6 +582,30 @@ root.mainloop()
 if mappingDF is None:
     sys.exit("Google Sheets mapping not loaded. Please select a credentials.json file.")
 rootFolder = rootFolderVar.get()
+
+# ==================================================
+# Resolve exiftool — bundled location takes priority
+# ==================================================
+_bundled_exiftool = os.path.join(rootFolder, "DAMSG_exif", "exiftool.exe")
+if os.path.isfile(_bundled_exiftool):
+    EXIFTOOL_PATH = _bundled_exiftool
+else:
+    EXIFTOOL_PATH = shutil.which("exiftool")
+EXIFTOOL_AVAILABLE = EXIFTOOL_PATH is not None
+
+if not EXIFTOOL_AVAILABLE:
+    scan_warnings.append({"level": "WARN", "file": "", "issue": "exiftool not found — date extraction will fall back to filesystem ctime"})
+    messagebox.showwarning(
+        "exiftool not found",
+        "exiftool.exe was not found in the expected location:\n\n"
+        f"  {_bundled_exiftool}\n\n"
+        "Date extraction will fall back to filesystem creation time,\n"
+        "which may not reflect the original capture date.\n\n"
+        "To fix: download exiftool(-k).exe from exiftool.org,\n"
+        "rename it to exiftool.exe, and place it in:\n"
+        f"  {os.path.join(rootFolder, 'DAMSG_exif')}\\"
+    )
+
 institution = institutionVar.get()
 collection = collectionVar.get()
 scanMode = scanModeVar.get()
