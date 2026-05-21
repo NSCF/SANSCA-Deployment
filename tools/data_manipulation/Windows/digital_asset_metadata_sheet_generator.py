@@ -12,6 +12,7 @@ import platform
 import sys
 import pathlib
 import hashlib
+import shutil
 
 # ==================================================
 # Google Sheets configuration
@@ -459,16 +460,21 @@ def selectRootFolder():
     rootFolderVar.set(p)
     rootLabel.config(text=p)
 
-    exiftool_exe = pathlib.Path(p) / "DAMSG_exif" / "exiftool.exe"
+    exe_name = "exiftool.exe" if platform.system() == "Windows" else "exiftool"
+    exiftool_exe = pathlib.Path(p) / "DAMSG_exif" / exe_name
     if exiftool_exe.is_file():
         EXIFTOOL_PATH = str(exiftool_exe)
         EXIFTOOL_AVAILABLE = True
         exiftoolStatusLabel.config(text=f"exiftool found: {exiftool_exe}", fg="green")
+    elif (system_exiftool := shutil.which("exiftool")):
+        EXIFTOOL_PATH = system_exiftool
+        EXIFTOOL_AVAILABLE = True
+        exiftoolStatusLabel.config(text=f"exiftool found (system): {system_exiftool}", fg="green")
     else:
         EXIFTOOL_PATH = None
         EXIFTOOL_AVAILABLE = False
         exiftoolStatusLabel.config(
-            text=f"exiftool not found — place exiftool.exe in: {exiftool_exe.parent}",
+            text=f"exiftool not found — place {exe_name} in: {exiftool_exe.parent}",
             fg="red"
         )
 
