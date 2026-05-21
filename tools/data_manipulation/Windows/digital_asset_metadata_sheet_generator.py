@@ -818,6 +818,7 @@ categories = [
     d for d in os.listdir(rootFolder)
     if os.path.isdir(os.path.join(rootFolder, d))
     and d not in EXCLUDED_ROOT_FOLDERS
+    and not d.startswith(".")
 ]
 
 # ==================================================
@@ -829,8 +830,8 @@ for cat in categories:
     if not os.path.isdir(cat_path):
         continue
     targets = CATEGORY_TARGETS.get(cat, [])
-    for inst in [d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path, d))]:
-        for coll in [d for d in os.listdir(os.path.join(cat_path, inst)) if os.path.isdir(os.path.join(cat_path, inst, d))]:
+    for inst in [d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path, d)) and not d.startswith(".")]:
+        for coll in [d for d in os.listdir(os.path.join(cat_path, inst)) if os.path.isdir(os.path.join(cat_path, inst, d)) and not d.startswith(".")]:
             if scanMode == "Single Collection" and (inst != institution or coll != collection):
                 continue
             if scanMode == "All Collections (selected institution)" and inst != institution:
@@ -853,10 +854,10 @@ for cat in categories:
     if not os.path.isdir(cat_path):
         continue
 
-    insts = [d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path, d))]
+    insts = [d for d in os.listdir(cat_path) if os.path.isdir(os.path.join(cat_path, d)) and not d.startswith(".")]
     for inst in insts:
         inst_path = os.path.join(cat_path, inst)
-        collections = [d for d in os.listdir(inst_path) if os.path.isdir(os.path.join(inst_path, d))]
+        collections = [d for d in os.listdir(inst_path) if os.path.isdir(os.path.join(inst_path, d)) and not d.startswith(".")]
         for coll in collections:
             if scanMode == "Single Collection" and (inst != institution or coll != collection):
                 continue
@@ -1420,7 +1421,7 @@ def open_file(filepath):
 
 damsg_output_folder = os.path.join(rootFolder, "DAMSG_output")
 for f in sorted(os.listdir(damsg_output_folder)):
-    if f.endswith(".csv"):
+    if f.endswith(".csv") and not f.startswith("."):
         open_file(os.path.join(damsg_output_folder, f))
 if outputChoiceVar.get() in ("Both", "Excel only"):
     open_file(master_xlsx)
