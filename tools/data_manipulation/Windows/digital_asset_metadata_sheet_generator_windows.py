@@ -12,7 +12,6 @@ import platform
 import sys
 import pathlib
 import hashlib
-import shutil
 
 # ==================================================
 # Google Sheets configuration
@@ -453,21 +452,18 @@ def selectRootFolder():
     rootFolderVar.set(p)
     rootLabel.config(text=p)
 
-    bundled = os.path.join(p, "DAMSG_exif", "exiftool.exe")
-    if os.path.isfile(bundled):
-        EXIFTOOL_PATH = bundled
+    exiftool_exe = pathlib.Path(p) / "DAMSG_exif" / "exiftool.exe"
+    if exiftool_exe.is_file():
+        EXIFTOOL_PATH = str(exiftool_exe)
         EXIFTOOL_AVAILABLE = True
-        exiftoolStatusLabel.config(text=f"exiftool found: {bundled}", fg="green")
+        exiftoolStatusLabel.config(text=f"exiftool found: {exiftool_exe}", fg="green")
     else:
-        EXIFTOOL_PATH = shutil.which("exiftool")
-        EXIFTOOL_AVAILABLE = EXIFTOOL_PATH is not None
-        if EXIFTOOL_AVAILABLE:
-            exiftoolStatusLabel.config(text=f"exiftool found on PATH: {EXIFTOOL_PATH}", fg="green")
-        else:
-            exiftoolStatusLabel.config(
-                text=f"exiftool not found — place exiftool.exe in: {os.path.join(p, 'DAMSG_exif')}",
-                fg="red"
-            )
+        EXIFTOOL_PATH = None
+        EXIFTOOL_AVAILABLE = False
+        exiftoolStatusLabel.config(
+            text=f"exiftool not found — place exiftool.exe in: {exiftool_exe.parent}",
+            fg="red"
+        )
 
 def loadGoogleSheets():
     global mappingDF, atomMappingDF
