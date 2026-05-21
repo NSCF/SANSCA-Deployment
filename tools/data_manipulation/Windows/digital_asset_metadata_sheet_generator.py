@@ -93,11 +93,11 @@ AUDIENCE_FALLBACK = "Review needed"  # Fallback audience if category not in map
 # Add new categories here as needed
 # ==================================================
 DESCRIPTION_TEMPLATE_MAP = {
-    "digital_vouchers": "Digital image of voucher specimen — {institutionCode}{collectionCode}",
-    "specimen_labels":  "Specimen label scan — {institutionCode}{collectionCode}",
-    "registers":        "Archival collection register - {institutionCode}{collectionCode}",
+    "digital_vouchers": "Digital image of voucher specimen ({institutionCode}{collectionCode})",
+    "specimen_labels":  "Specimen label scan ({institutionCode}{collectionCode})",
+    "registers":        "Archival collection register ({institutionCode}{collectionCode})",
 }
-DESCRIPTION_FALLBACK = "Review needed — {institutionCode}{collectionCode}"
+DESCRIPTION_FALLBACK = "Review needed ({institutionCode}{collectionCode})"
 
 # ==================================================
 # Excluded Root Folders
