@@ -446,11 +446,28 @@ except Exception as e:
 Label(root, text="Select Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
 
 def selectRootFolder():
+    global EXIFTOOL_PATH, EXIFTOOL_AVAILABLE
     p = filedialog.askdirectory()
     if not p:
         return
     rootFolderVar.set(p)
     rootLabel.config(text=p)
+
+    bundled = os.path.join(p, "DAMSG_exif", "exiftool.exe")
+    if os.path.isfile(bundled):
+        EXIFTOOL_PATH = bundled
+        EXIFTOOL_AVAILABLE = True
+        exiftoolStatusLabel.config(text=f"exiftool found: {bundled}", fg="green")
+    else:
+        EXIFTOOL_PATH = shutil.which("exiftool")
+        EXIFTOOL_AVAILABLE = EXIFTOOL_PATH is not None
+        if EXIFTOOL_AVAILABLE:
+            exiftoolStatusLabel.config(text=f"exiftool found on PATH: {EXIFTOOL_PATH}", fg="green")
+        else:
+            exiftoolStatusLabel.config(
+                text=f"exiftool not found — place exiftool.exe in: {os.path.join(p, 'DAMSG_exif')}",
+                fg="red"
+            )
 
 def loadGoogleSheets():
     global mappingDF, atomMappingDF
@@ -531,6 +548,8 @@ scanModeVar.trace_add("write", updateScanModeUI)
 Button(root,text="Select SANSCA Root Folder",command=selectRootFolder,bg="lightgreen").pack(fill="x", padx=20, pady=5)
 rootLabel=Label(root,text="",wraplength=800,anchor="w")
 rootLabel.pack()
+exiftoolStatusLabel=Label(root,text="exiftool status: select a root folder first",wraplength=800,anchor="w",fg="gray")
+exiftoolStatusLabel.pack()
 
 Button(root,text="Load Mapping from Google Sheets",command=loadGoogleSheets,bg="lightyellow").pack(fill="x", padx=20, pady=5)
 sheetStatusLabel=Label(root,text="Mapping not loaded",wraplength=800,anchor="w",fg="gray")
@@ -583,28 +602,8 @@ if mappingDF is None:
     sys.exit("Google Sheets mapping not loaded. Please select a credentials.json file.")
 rootFolder = rootFolderVar.get()
 
-# ==================================================
-# Resolve exiftool — bundled location takes priority
-# ==================================================
-_bundled_exiftool = os.path.join(rootFolder, "DAMSG_exif", "exiftool.exe")
-if os.path.isfile(_bundled_exiftool):
-    EXIFTOOL_PATH = _bundled_exiftool
-else:
-    EXIFTOOL_PATH = shutil.which("exiftool")
-EXIFTOOL_AVAILABLE = EXIFTOOL_PATH is not None
-
 if not EXIFTOOL_AVAILABLE:
     scan_warnings.append({"level": "WARN", "file": "", "issue": "exiftool not found — date extraction will fall back to filesystem ctime"})
-    messagebox.showwarning(
-        "exiftool not found",
-        "exiftool.exe was not found in the expected location:\n\n"
-        f"  {_bundled_exiftool}\n\n"
-        "Date extraction will fall back to filesystem creation time,\n"
-        "which may not reflect the original capture date.\n\n"
-        "To fix: download exiftool(-k).exe from exiftool.org,\n"
-        "rename it to exiftool.exe, and place it in:\n"
-        f"  {os.path.join(rootFolder, 'DAMSG_exif')}\\"
-    )
 
 institution = institutionVar.get()
 collection = collectionVar.get()
