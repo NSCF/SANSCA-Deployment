@@ -56,7 +56,7 @@ If exiftool is not found on PATH the tool will warn you on startup and fall back
 ## Usage
 
 ```
-python digital_asset_metadata_sheet_generator_windows.py
+python digital_asset_metadata_sheet_generator.py
 ```
 
 ### GUI Walkthrough
@@ -120,13 +120,13 @@ pip install pyinstaller
 2. From the directory containing the script, run:
 
 ```
-pyinstaller --onefile --windowed digital_asset_metadata_sheet_generator_windows.py
+pyinstaller --onefile --windowed digital_asset_metadata_sheet_generator.py
 ```
 
 3. The executable will be located at:
 
 ```
-dist/digital_asset_metadata_sheet_generator_windows.exe
+dist/digital_asset_metadata_sheet_generator.exe
 ```
 
 ## License

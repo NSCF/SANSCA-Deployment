@@ -24,7 +24,7 @@
 
 ## Validation Tools
 
-- [X] [SHA256_checksum_tool.bat](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_validation/SHA256_checksum_tool.bat), see [Readme](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_validation/SHA256_checksum_tool_readme.md) (Test and Finalise)
+- [X] [SHA256_checksum_tool.bat](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_validation/SHA256_checksum_tool/SHA256_checksum_tool.bat), see [Readme](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_validation/SHA256_checksum_tool/README.md) (Test and Finalise)
 - [ ] Herbarium Metadata Validator Tool (Delayed)
 - [ ] Zoological type Metadata Validator Tool (Delayed)
 - [ ] Archival Metadata Validator Tool (Delayed)
@@ -33,7 +33,8 @@
 ## Digital Asset Management Tools
 
 - [ ] [Tiff Folder Scanner - MacOS](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/MacOS), see [Readme](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_manipulation/MacOS/README.md) (Test and Finalise)
-- [ ] [Tiff Folder Scanner - Windows](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/Windows), see [Readme](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_manipulation/Windows/README.md) (Test and Finalise)
+- [ ] [Digital Asset Metadata Sheet Generator (DAMSG) - Windows](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/Windows), see [Readme](https://github.com/NSCF/SANSCA-Deployment/blob/main/tools/data_manipulation/Windows/README.md) (Test and Finalise)
+- [ ] [SANSCA AI Metadata Assistant - Windows](https://github.com/NSCF/SANSCA-Deployment/tree/main/tools/data_manipulation/Windows), Workshop tool for AI enrichment of DAMSG-generated metadata CSVs using the Gemini API (In progress)
 
 ## Reporting Templates
 
