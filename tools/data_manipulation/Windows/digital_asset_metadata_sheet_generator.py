@@ -470,6 +470,13 @@ def selectRootFolder():
     rootFolderVar.set(p)
     rootLabel.config(text=p)
 
+    # Auto-load Supabase connection string if present
+    supabase_url_file = pathlib.Path(p) / "DAMSG_auth" / "supabase_url.txt"
+    if supabase_url_file.is_file():
+        saved = supabase_url_file.read_text(encoding="utf-8").strip()
+        if saved:
+            supabaseUrlVar.set(saved)
+
     exe_name = "exiftool.exe" if platform.system() == "Windows" else "exiftool"
     exiftool_exe = pathlib.Path(p) / "DAMSG_exif" / exe_name
     if exiftool_exe.is_file():
@@ -1505,6 +1512,12 @@ def push_to_supabase(new_la_df, new_atom_df, conn_string):
                 atom_count = _upsert(cur, SUPABASE_ATOM_TABLE, atom_df, ["_rowKey"])
 
         conn.commit()
+
+        # Save connection string for next run
+        auth_dir = pathlib.Path(rootFolder) / "DAMSG_auth"
+        auth_dir.mkdir(exist_ok=True)
+        (auth_dir / "supabase_url.txt").write_text(conn_string, encoding="utf-8")
+
         messagebox.showinfo(
             "Supabase sync complete",
             f"'{SUPABASE_LA_TABLE}': {la_count} row(s) upserted\n"
