@@ -57,3 +57,18 @@ cd la-toolkit
 
 For the LA-Toolkit to successfully connect and validate to the server, to be able to perform the necessary Ansible playbooks. You must ensure that the username set in the LA-Toolkit UI is defined in `visudo` with `NOPASSWD` being defined.
 - In `visudo` you must add the user account as such: `{USERNAME} ALL=(ALL) NOPASSWD:ALL`
+
+# Local Tooling Setup (Windows/MacOS)
+
+To use the Data Manipulation tools (DAMSG and AI Assistant), ensure your local Python environment is prepared:
+
+```bash
+pip install pandas openpyxl pillow psycopg2-binary google-generativeai
+```
+
+### External Dependencies
+- **exiftool**: Highly recommended for date extraction. 
+  - Windows: Place `exiftool.exe` in `C:\Windows\` or inside a folder named `DAMSG_exif` at the root of your data directory.
+
+### Security Note
+- The tools may store sensitive connection strings or API keys in `DAMSG_auth/`. Ensure this directory is excluded from any public version control if you are managing collection data within a git repo.
