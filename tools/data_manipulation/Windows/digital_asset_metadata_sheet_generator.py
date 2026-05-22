@@ -14,6 +14,13 @@ import pathlib
 import hashlib
 import shutil
 
+try:
+    import psycopg2
+    from psycopg2.extras import execute_values
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+
 # ==================================================
 # Google Sheets configuration
 # ==================================================
@@ -413,6 +420,8 @@ scanTypeVar = StringVar()
 hardDriveIdVar = StringVar()
 clearPreviousMetadataVar = BooleanVar(value=False)
 clearMasterFilesVar = BooleanVar(value=False)
+pushToSupabaseVar = BooleanVar(value=False)
+supabaseUrlVar = StringVar()
 
 fileFilters = ["All","TIFF only","RAW only","JPEG only", "PDF only"]
 outputChoices = ["CSV only","Excel only","Both"]
@@ -598,6 +607,18 @@ Checkbutton(
     text="Clear master inventory files before scan (testing only)",
     variable=clearMasterFilesVar,
     fg="red"
+).pack(pady=2)
+
+Label(root, text="Supabase connection string (paste from dashboard):").pack(pady=(8, 0))
+supabaseUrlEntry = Entry(root, textvariable=supabaseUrlVar, font=("Arial", 9), show="")
+supabaseUrlEntry.pack(fill="x", padx=20)
+
+Checkbutton(
+    root,
+    text="Push rows to Supabase after scan" + ("" if PSYCOPG2_AVAILABLE else " (requires: pip install psycopg2-binary)"),
+    variable=pushToSupabaseVar,
+    fg="darkblue",
+    state=NORMAL if PSYCOPG2_AVAILABLE else DISABLED,
 ).pack(pady=2)
 
 Button(root,text="Start Processing",command=root.destroy,bg="lightblue").pack(pady=20)
@@ -1403,6 +1424,103 @@ audit_path = run_preservation_audit(
     updated_master_df,
     updated_atom_df.to_dict("records") if not updated_atom_df.empty else None
 )
+
+# ==================================================
+# Push rows to Supabase
+# ==================================================
+SUPABASE_LA_TABLE   = "inventory"
+SUPABASE_ATOM_TABLE = "inventory_atom"
+
+def push_to_supabase(new_la_df, new_atom_df, conn_string):
+    """Upsert LA and AtoM rows into Supabase PostgreSQL.
+
+    Creates tables automatically on first run.
+    Existing rows (matched by primary key) are overwritten; new rows are inserted.
+    """
+    conn_string = conn_string.strip()
+    if not conn_string:
+        messagebox.showerror("Supabase", "No connection string provided.")
+        return
+
+    try:
+        conn = psycopg2.connect(conn_string)
+        conn.autocommit = False
+    except Exception as e:
+        messagebox.showerror("Supabase connection failed", str(e))
+        return
+
+    def _ensure_table(cur, table_name, df, pk_cols):
+        cols_sql = ", ".join(f'"{c}" TEXT' for c in df.columns)
+        pk_sql   = ", ".join(f'"{c}"' for c in pk_cols)
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                {cols_sql},
+                PRIMARY KEY ({pk_sql})
+            )
+        """)
+        cur.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+            (table_name,)
+        )
+        existing = {r[0] for r in cur.fetchall()}
+        for col in df.columns:
+            if col not in existing:
+                cur.execute(f'ALTER TABLE {table_name} ADD COLUMN "{col}" TEXT DEFAULT \'\'')
+
+    def _upsert(cur, table_name, df, pk_cols):
+        if df.empty:
+            return 0
+        df = df.fillna("").astype(str)
+        cols       = list(df.columns)
+        update_set = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in cols if c not in pk_cols)
+        sql = f"""
+            INSERT INTO {table_name} ({", ".join(f'"{c}"' for c in cols)})
+            VALUES %s
+            ON CONFLICT ({", ".join(f'"{c}"' for c in pk_cols)})
+            DO UPDATE SET {update_set}
+        """
+        rows = [tuple(r) for r in df.itertuples(index=False, name=None)]
+        execute_values(cur, sql, rows)
+        return len(rows)
+
+    try:
+        with conn.cursor() as cur:
+            la_count = 0
+            if not new_la_df.empty:
+                _ensure_table(cur, SUPABASE_LA_TABLE, new_la_df, ["documentId", "scanType"])
+                la_count = _upsert(cur, SUPABASE_LA_TABLE, new_la_df, ["documentId", "scanType"])
+
+            atom_count = 0
+            if not new_atom_df.empty:
+                atom_df = new_atom_df.copy().fillna("")
+                # Synthetic key: covers both parent rows (legacyId set) and item rows (digitalObjectPath set)
+                atom_df["_rowKey"] = (
+                    atom_df.get("legacyId", "").astype(str) + "|" +
+                    atom_df.get("digitalObjectPath", "").astype(str) + "|" +
+                    atom_df.get("scanType", "").astype(str)
+                )
+                _ensure_table(cur, SUPABASE_ATOM_TABLE, atom_df, ["_rowKey"])
+                atom_count = _upsert(cur, SUPABASE_ATOM_TABLE, atom_df, ["_rowKey"])
+
+        conn.commit()
+        messagebox.showinfo(
+            "Supabase sync complete",
+            f"'{SUPABASE_LA_TABLE}': {la_count} row(s) upserted\n"
+            f"'{SUPABASE_ATOM_TABLE}': {atom_count} row(s) upserted"
+        )
+    except Exception as e:
+        conn.rollback()
+        messagebox.showerror("Supabase write failed", str(e))
+    finally:
+        conn.close()
+
+if pushToSupabaseVar.get() and PSYCOPG2_AVAILABLE:
+    atom_push_df = (
+        updated_atom_df[updated_atom_df["levelOfDescription"].isin(["Item", ""])]
+        if not updated_atom_df.empty and "levelOfDescription" in updated_atom_df.columns
+        else pd.DataFrame()
+    )
+    push_to_supabase(new_rows_df, atom_push_df, supabaseUrlVar.get())
 
 # ==================================================
 # Optionally, open files automatically
