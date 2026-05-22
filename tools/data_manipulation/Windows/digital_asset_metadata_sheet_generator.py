@@ -438,7 +438,7 @@ clearPreviousMetadataVar = BooleanVar(value=False)
 clearMasterFilesVar = BooleanVar(value=False)
 pushToSupabaseVar = BooleanVar(value=False)
 supabaseUrlVar = StringVar()
-operatorVar = StringVar(value=os.getenv("USERNAME") or os.getenv("USER") or "")
+operatorVar = StringVar(value="")
 
 fileFilters = ["All","TIFF only","RAW only","JPEG only", "PDF only"]
 outputChoices = ["CSV only","Excel only","Both"]
@@ -457,6 +457,7 @@ scanTypeVar.set(scanTypes[0])
 
 mappingDF = None
 atomMappingDF = None
+operatorsDF = None
 
 # ==================================================
 # UI functions
@@ -561,12 +562,18 @@ def deployFolderStructure():
     )
 
 def loadGoogleSheets():
-    global mappingDF, atomMappingDF
+    global mappingDF, atomMappingDF, operatorsDF
     try:
         sheetStatusLabel.config(text="Connecting…", fg="gray")
         root.update()
         mappingDF     = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master_la_collections"))
         atomMappingDF = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="master_atom_collections"))
+
+        try:
+            operatorsDF = pd.read_csv(SHEET_CSV_URL(id=SHEET_ID, sheet="operators"))
+            updateOperatorOptions()
+        except Exception:
+            pass  # operators sheet is optional — dropdown keeps OS username fallback
 
         # Build institution name map dynamically from both sheets
         global INSTITUTION_CODE_MAP
@@ -591,6 +598,19 @@ def loadGoogleSheets():
     except Exception as e:
         messagebox.showerror("Google Sheets Error", str(e))
         sheetStatusLabel.config(text="Connection failed", fg="red")
+
+
+def updateOperatorOptions():
+    if operatorsDF is None or "name" not in operatorsDF.columns:
+        return
+    names = sorted(operatorsDF["name"].dropna().str.strip().unique())
+    if not names:
+        return
+    operatorMenu["menu"].delete(0, "end")
+    for name in names:
+        operatorMenu["menu"].add_command(label=name, command=lambda v=name: operatorVar.set(v))
+    if operatorVar.get() not in names:
+        operatorVar.set(names[0])
 
 def updateInstitutionOptions():
     if mappingDF is None:
@@ -654,7 +674,8 @@ Label(_inner,text="Hard Drive ID (serial number or label):").pack(pady=5)
 Entry(_inner,textvariable=hardDriveIdVar,font=("Arial",11)).pack(fill="x", padx=20)
 
 Label(_inner,text="Operator (person running this scan):").pack(pady=5)
-Entry(_inner,textvariable=operatorVar,font=("Arial",11)).pack(fill="x", padx=20)
+operatorMenu = OptionMenu(_inner, operatorVar, "— load sheets to populate —")
+operatorMenu.pack(fill="x", padx=20)
 
 Label(_inner,text="Scan Mode:").pack(pady=5)
 OptionMenu(_inner,scanModeVar,*scanModes).pack(fill="x", padx=20)
