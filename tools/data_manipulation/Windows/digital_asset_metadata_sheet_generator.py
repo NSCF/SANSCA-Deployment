@@ -18,7 +18,8 @@ try:
     import psycopg2
     from psycopg2.extras import execute_values
     PSYCOPG2_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"DEBUG: psycopg2 load failed: {e}")
     PSYCOPG2_AVAILABLE = False
 
 # ==================================================
@@ -630,6 +631,7 @@ root.mainloop()
 # ==================================================
 if mappingDF is None:
     sys.exit("Google Sheets mapping not loaded. Please select a credentials.json file.")
+    sys.exit("Google Sheets mapping not loaded. Please click 'Load Mapping from Google Sheets' before clicking 'Start Processing'.")
 rootFolder = rootFolderVar.get()
 
 if not EXIFTOOL_AVAILABLE:
