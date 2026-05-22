@@ -57,7 +57,7 @@ ATOM_COLUMNS = [
     "eventActors", "eventActorHistories", "culture",
 ]
 # Extended columns for output files — includes audit fields not part of AtoM import
-ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType", "hardDriveId"]
+ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType", "hardDriveId", "submittedBy"]
 
 # ==================================================
 # System files to ignore during scanning
@@ -438,6 +438,7 @@ clearPreviousMetadataVar = BooleanVar(value=False)
 clearMasterFilesVar = BooleanVar(value=False)
 pushToSupabaseVar = BooleanVar(value=False)
 supabaseUrlVar = StringVar()
+operatorVar = StringVar(value=os.getenv("USERNAME") or os.getenv("USER") or "")
 
 fileFilters = ["All","TIFF only","RAW only","JPEG only", "PDF only"]
 outputChoices = ["CSV only","Excel only","Both"]
@@ -652,6 +653,9 @@ OptionMenu(_inner,scanTypeVar,*scanTypes).pack(fill="x", padx=20)
 Label(_inner,text="Hard Drive ID (serial number or label):").pack(pady=5)
 Entry(_inner,textvariable=hardDriveIdVar,font=("Arial",11)).pack(fill="x", padx=20)
 
+Label(_inner,text="Operator (person running this scan):").pack(pady=5)
+Entry(_inner,textvariable=operatorVar,font=("Arial",11)).pack(fill="x", padx=20)
+
 Label(_inner,text="Scan Mode:").pack(pady=5)
 OptionMenu(_inner,scanModeVar,*scanModes).pack(fill="x", padx=20)
 
@@ -716,6 +720,7 @@ clearPrevMeta = clearPreviousMetadataVar.get()
 clearMaster   = clearMasterFilesVar.get()
 pushSupabase  = pushToSupabaseVar.get()
 supabaseUrl   = supabaseUrlVar.get().strip()
+operator      = operatorVar.get().strip()
 
 if not EXIFTOOL_AVAILABLE:
     scan_warnings.append({"level": "WARN", "file": "", "issue": "exiftool not found — date extraction will fall back to filesystem ctime"})
@@ -815,6 +820,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta, atom_me
                     "assetCategory":   asset_category,
                     "scanModeApplied": scanMode,
                     "checksumSHA256":  checksum,
+                    "submittedBy":     operator,
                     # preserved for legacy/archival use
                     "dateCreated":     date_created,
                 }
@@ -1017,6 +1023,7 @@ for cat in categories:
                         f.write(f"scanMode,{scanMode}\n")
                         f.write(f"scanTimestamp,{RUN_TIMESTAMP}\n")
                         f.write(f"scanDate,{scanDateHuman}\n")
+                        f.write(f"submittedBy,{operator}\n")
                         f.write(f"institutionCode,{inst}\n")
                         f.write(f"collectionCode,{coll}\n\n")
                         df.to_csv(f, index=False, lineterminator='\n')
@@ -1071,6 +1078,7 @@ for cat in categories:
                         "scanModeApplied":   scanMode,
                         "additionalNames":   "",
                         "checksumSHA256":    generate_checksum(subset_path),
+                        "submittedBy":       operator,
                     }
                     # Add ALL mapping columns automatically (same as scan_collection)
                     for col in mappingDF.columns:
@@ -1136,6 +1144,7 @@ for cat in categories:
                     item_row["checksumSHA256"]      = item.get("checksumSHA256", "")
                     item_row["scanType"]            = item.get("scanType", "")
                     item_row["hardDriveId"]         = item.get("hardDriveId", "")
+                    item_row["submittedBy"]         = operator
                     atom_rows.append(item_row)
 
                 # Write AtoM per-collection metadata CSV now that rows are generated
@@ -1151,6 +1160,7 @@ for cat in categories:
                             f.write(f"scanMode,{scanMode}\n")
                             f.write(f"scanTimestamp,{RUN_TIMESTAMP}\n")
                             f.write(f"scanDate,{scanDateHuman}\n")
+                            f.write(f"submittedBy,{operator}\n")
                             f.write(f"institutionCode,{inst}\n")
                             f.write(f"collectionCode,{coll}\n\n")
                             pd.DataFrame(atom_subset_rows, columns=ATOM_OUTPUT_COLUMNS).to_csv(f, index=False, lineterminator='\n')
@@ -1173,6 +1183,7 @@ expected_columns = [
     "assetCategory", "dateCreated", "scanModeApplied",
     "institutionCode", "collectionCode", "institutionName",
     "additionalNames", "holdingInstitution", "subject", "checksumSHA256",
+    "submittedBy",
 ]
 
 for col in expected_columns:
