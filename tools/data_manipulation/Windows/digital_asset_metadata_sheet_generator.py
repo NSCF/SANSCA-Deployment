@@ -57,7 +57,7 @@ ATOM_COLUMNS = [
     "eventActors", "eventActorHistories", "culture",
 ]
 # Extended columns for output files — includes audit fields not part of AtoM import
-ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType", "hardDriveId", "submittedBy"]
+ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType", "hardDriveId", "submittedBy", "datasetID"]
 
 # ==================================================
 # System files to ignore during scanning
@@ -842,6 +842,7 @@ def scan_collection(categoryRoot, institutionCode, collectionCode, meta, atom_me
                     "scanModeApplied": scanMode,
                     "checksumSHA256":  checksum,
                     "submittedBy":     operator,
+                    "datasetID":       f"{institutionCode}-{collectionCode}",
                     # preserved for legacy/archival use
                     "dateCreated":     date_created,
                 }
@@ -1100,6 +1101,7 @@ for cat in categories:
                         "additionalNames":   "",
                         "checksumSHA256":    generate_checksum(subset_path),
                         "submittedBy":       operator,
+                        "datasetID":         f"{inst}-{coll}",
                     }
                     # Add ALL mapping columns automatically (same as scan_collection)
                     for col in mappingDF.columns:
@@ -1137,6 +1139,7 @@ for cat in categories:
 
                 # Build extentAndMedium summary from child items
                 parent_row["extentAndMedium"] = build_extent_summary(subset_rows)
+                parent_row["datasetID"]       = f"{inst}-{coll}"
 
                 atom_rows.append(parent_row)
 
@@ -1166,6 +1169,7 @@ for cat in categories:
                     item_row["scanType"]            = item.get("scanType", "")
                     item_row["hardDriveId"]         = item.get("hardDriveId", "")
                     item_row["submittedBy"]         = operator
+                    item_row["datasetID"]           = f"{inst}-{coll}"
                     atom_rows.append(item_row)
 
                 # Write AtoM per-collection metadata CSV now that rows are generated
@@ -1204,7 +1208,7 @@ expected_columns = [
     "assetCategory", "dateCreated", "scanModeApplied",
     "institutionCode", "collectionCode", "institutionName",
     "additionalNames", "holdingInstitution", "subject", "checksumSHA256",
-    "submittedBy",
+    "submittedBy", "datasetID",
 ]
 
 for col in expected_columns:
