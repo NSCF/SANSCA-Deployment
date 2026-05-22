@@ -704,16 +704,21 @@ root.mainloop()
 if mappingDF is None:
     sys.exit("Google Sheets mapping not loaded. Please select a credentials.json file.")
     sys.exit("Google Sheets mapping not loaded. Please click 'Load Mapping from Google Sheets' before clicking 'Start Processing'.")
-rootFolder = rootFolderVar.get()
+rootFolder    = rootFolderVar.get()
+institution   = institutionVar.get()
+collection    = collectionVar.get()
+scanMode      = scanModeVar.get()
+scanType      = scanTypeVar.get()
+hardDriveId   = hardDriveIdVar.get().strip()
+fileFilter    = fileFilterVar.get()
+outputChoice  = outputChoiceVar.get()
+clearPrevMeta = clearPreviousMetadataVar.get()
+clearMaster   = clearMasterFilesVar.get()
+pushSupabase  = pushToSupabaseVar.get()
+supabaseUrl   = supabaseUrlVar.get().strip()
 
 if not EXIFTOOL_AVAILABLE:
     scan_warnings.append({"level": "WARN", "file": "", "issue": "exiftool not found — date extraction will fall back to filesystem ctime"})
-
-institution = institutionVar.get()
-collection = collectionVar.get()
-scanMode = scanModeVar.get()
-scanType = scanTypeVar.get()
-hardDriveId = hardDriveIdVar.get().strip()
 
 # ==================================================
 # File scanning logic
@@ -725,7 +730,7 @@ fileTypes = {
     "JPEG only":[ ".jpg",".jpeg"],
     "PDF only":[ ".pdf"]
 }
-extensions = tuple(fileTypes[fileFilterVar.get()])
+extensions = tuple(fileTypes[fileFilter])
 all_rows = []
 atom_rows = []
 
@@ -831,7 +836,7 @@ master_csv = os.path.join(rootFolder, "DAMSG_output", f"digital_asset_inventory_
 master_xlsx = os.path.join(rootFolder, "DAMSG_output", f"digital_asset_inventory_la_{RUN_TIMESTAMP}.xlsx")
 os.makedirs(os.path.dirname(master_csv), exist_ok=True)
 
-if clearMasterFilesVar.get():
+if clearMaster:
     output_folder = os.path.dirname(master_csv)
     for f in os.listdir(output_folder):
         if f.startswith("digital_asset_inventory_la_") and f.endswith((".csv", ".xlsx")):
@@ -966,7 +971,7 @@ for cat in categories:
                 continue
             meta = la_rows.iloc[0] if not la_rows.empty else None
 
-            if clearPreviousMetadataVar.get():
+            if clearPrevMeta:
                 meta_folder_pre = os.path.join(rootFolder, "DAMSG_output", "metadata", inst, coll)
                 if os.path.isdir(meta_folder_pre):
                     for old_file in os.listdir(meta_folder_pre):
@@ -1416,11 +1421,10 @@ def run_preservation_audit(master_df, atom_df=None):
 # ==================================================
 # Write master CSV/Excel
 # ==================================================
-output_choice = outputChoiceVar.get()
-if output_choice in ("CSV only", "Both"):
+if outputChoice in ("CSV only", "Both"):
     updated_master_df.to_csv(master_csv, index=False, encoding='utf-8-sig', lineterminator='\n')
     print(f"Processing complete. Master CSV updated: {master_csv}")
-if output_choice in ("Excel only", "Both"):
+if outputChoice in ("Excel only", "Both"):
     updated_master_df.to_excel(master_xlsx, index=False)
     print(f"Processing complete. Master Excel updated: {master_xlsx}")
 
@@ -1594,13 +1598,13 @@ def push_to_supabase(new_la_df, new_atom_df, conn_string):
     finally:
         conn.close()
 
-if pushToSupabaseVar.get() and PSYCOPG2_AVAILABLE:
+if pushSupabase and PSYCOPG2_AVAILABLE:
     atom_push_df = (
         updated_atom_df[updated_atom_df["levelOfDescription"].isin(["Item", ""])]
         if not updated_atom_df.empty and "levelOfDescription" in updated_atom_df.columns
         else pd.DataFrame()
     )
-    push_to_supabase(new_rows_df, atom_push_df, supabaseUrlVar.get())
+    push_to_supabase(new_rows_df, atom_push_df, supabaseUrl)
 
 # ==================================================
 # Optionally, open files automatically
@@ -1621,5 +1625,5 @@ damsg_output_folder = os.path.join(rootFolder, "DAMSG_output")
 for f in sorted(os.listdir(damsg_output_folder)):
     if f.endswith(".csv") and not f.startswith("."):
         open_file(os.path.join(damsg_output_folder, f))
-if outputChoiceVar.get() in ("Both", "Excel only"):
+if outputChoice in ("Both", "Excel only"):
     open_file(master_xlsx)
