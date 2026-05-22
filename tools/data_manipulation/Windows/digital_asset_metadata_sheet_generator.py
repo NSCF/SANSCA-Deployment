@@ -4,7 +4,7 @@ import subprocess
 import pandas as pd
 from datetime import datetime
 from tkinter import (
-    Tk, Canvas, Label, Button, StringVar, BooleanVar,
+    Tk, Canvas, Frame, Scrollbar, Label, Button, StringVar, BooleanVar,
     OptionMenu, Checkbutton, Entry, filedialog, messagebox, DISABLED, NORMAL
 )
 from PIL import Image, ExifTags, ImageTk
@@ -405,10 +405,25 @@ def generate_metadata_document_id(institution_code, collection_code, category, r
 # ==================================================
 root = Tk()
 root.title("SANSCA Digital Asset Metadata Sheet Generator")
-root.geometry("850x950")
-root.resizable(False, False)
+root.update_idletasks()
+win_h = min(950, int(root.winfo_screenheight() * 0.90))
+root.geometry(f"850x{win_h}")
+root.resizable(False, True)
 
-Label(root,text="Select Root Folder and Mapping CSV",font=("Arial",12,"bold")).pack(pady=10)
+_outer = Frame(root)
+_outer.pack(fill="both", expand=True)
+_scrollbar = Scrollbar(_outer, orient="vertical")
+_scrollbar.pack(side="right", fill="y")
+_canvas = Canvas(_outer, highlightthickness=0, yscrollcommand=_scrollbar.set)
+_canvas.pack(side="left", fill="both", expand=True)
+_scrollbar.config(command=_canvas.yview)
+_inner = Frame(_canvas)
+_canvas_window = _canvas.create_window((0, 0), window=_inner, anchor="nw")
+_inner.bind("<Configure>", lambda _: _canvas.configure(scrollregion=_canvas.bbox("all")))
+_canvas.bind("<Configure>", lambda e: _canvas.itemconfig(_canvas_window, width=e.width))
+_canvas.bind_all("<MouseWheel>", lambda e: _canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+
+Label(_inner,text="Select Root Folder and Mapping CSV",font=("Arial",12,"bold")).pack(pady=10)
 
 rootFolderVar = StringVar()
 mappingFileVar = StringVar()
@@ -448,7 +463,7 @@ atomMappingDF = None
 script_dir = pathlib.Path(__file__).parent.resolve()
 logo_path = script_dir / "nscf_logo_crop.png"
 
-canvas = Canvas(root, width=300, height=80, bg="white", highlightthickness=0)
+canvas = Canvas(_inner, width=300, height=80, bg="white", highlightthickness=0)
 canvas.pack(pady=5)
 
 try:
@@ -460,7 +475,7 @@ except Exception as e:
     canvas.create_rectangle(0, 0, 300, 150, fill="lightgray")
     canvas.create_text(150, 75, text="[LOGO]", font=("Arial", 20, "bold"), fill="gray")
 
-Label(root, text="Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
+Label(_inner, text="Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
 
 def _apply_root_folder(p):
     """Update UI state after a root folder has been chosen or created."""
@@ -620,66 +635,66 @@ scanModeVar.trace_add("write", updateScanModeUI)
 # ==================================================
 # UI layout
 # ==================================================
-Button(root,text="Select Existing Root Folder",command=selectRootFolder,bg="lightgreen").pack(fill="x", padx=20, pady=(5,2))
-Button(root,text="Deploy New Folder Structure",command=deployFolderStructure,bg="lightyellow").pack(fill="x", padx=20, pady=(0,5))
-rootLabel=Label(root,text="",wraplength=800,anchor="w")
+Button(_inner,text="Select Existing Root Folder",command=selectRootFolder,bg="lightgreen").pack(fill="x", padx=20, pady=(5,2))
+Button(_inner,text="Deploy New Folder Structure",command=deployFolderStructure,bg="lightyellow").pack(fill="x", padx=20, pady=(0,5))
+rootLabel=Label(_inner,text="",wraplength=800,anchor="w")
 rootLabel.pack()
-exiftoolStatusLabel=Label(root,text="exiftool status: select a root folder first",wraplength=800,anchor="w",fg="gray")
+exiftoolStatusLabel=Label(_inner,text="exiftool status: select a root folder first",wraplength=800,anchor="w",fg="gray")
 exiftoolStatusLabel.pack()
 
-Button(root,text="Load Mapping from Google Sheets",command=loadGoogleSheets,bg="lightyellow").pack(fill="x", padx=20, pady=5)
-sheetStatusLabel=Label(root,text="Mapping not loaded",wraplength=800,anchor="w",fg="gray")
+Button(_inner,text="Load Mapping from Google Sheets",command=loadGoogleSheets,bg="lightyellow").pack(fill="x", padx=20, pady=5)
+sheetStatusLabel=Label(_inner,text="Mapping not loaded",wraplength=800,anchor="w",fg="gray")
 sheetStatusLabel.pack()
 
-Label(root,text="Scan Type:").pack(pady=5)
-OptionMenu(root,scanTypeVar,*scanTypes).pack(fill="x", padx=20)
+Label(_inner,text="Scan Type:").pack(pady=5)
+OptionMenu(_inner,scanTypeVar,*scanTypes).pack(fill="x", padx=20)
 
-Label(root,text="Hard Drive ID (serial number or label):").pack(pady=5)
-Entry(root,textvariable=hardDriveIdVar,font=("Arial",11)).pack(fill="x", padx=20)
+Label(_inner,text="Hard Drive ID (serial number or label):").pack(pady=5)
+Entry(_inner,textvariable=hardDriveIdVar,font=("Arial",11)).pack(fill="x", padx=20)
 
-Label(root,text="Scan Mode:").pack(pady=5)
-OptionMenu(root,scanModeVar,*scanModes).pack(fill="x", padx=20)
+Label(_inner,text="Scan Mode:").pack(pady=5)
+OptionMenu(_inner,scanModeVar,*scanModes).pack(fill="x", padx=20)
 
-Label(root,text="Institution:").pack(pady=5)
-institutionMenu=OptionMenu(root,institutionVar,"")
+Label(_inner,text="Institution:").pack(pady=5)
+institutionMenu=OptionMenu(_inner,institutionVar,"")
 institutionMenu.pack(fill="x", padx=20)
-Label(root,text="Collection:").pack(pady=5)
-collectionMenu=OptionMenu(root,collectionVar,"")
+Label(_inner,text="Collection:").pack(pady=5)
+collectionMenu=OptionMenu(_inner,collectionVar,"")
 collectionMenu.pack(fill="x", padx=20)
 
-Label(root,text="File Filter:").pack(pady=5)
-OptionMenu(root,fileFilterVar,*fileFilters).pack(fill="x", padx=20)
+Label(_inner,text="File Filter:").pack(pady=5)
+OptionMenu(_inner,fileFilterVar,*fileFilters).pack(fill="x", padx=20)
 
-Label(root,text="Output Choice:").pack(pady=5)
-OptionMenu(root,outputChoiceVar,*outputChoices).pack(fill="x", padx=20)
+Label(_inner,text="Output Choice:").pack(pady=5)
+OptionMenu(_inner,outputChoiceVar,*outputChoices).pack(fill="x", padx=20)
 
 Checkbutton(
-    root,
+    _inner,
     text="Clear previous metadata files before scan (testing only)",
     variable=clearPreviousMetadataVar,
     fg="red"
 ).pack(pady=5)
 
 Checkbutton(
-    root,
+    _inner,
     text="Clear master inventory files before scan (testing only)",
     variable=clearMasterFilesVar,
     fg="red"
 ).pack(pady=2)
 
-Label(root, text="Supabase connection string (paste from dashboard):").pack(pady=(8, 0))
-supabaseUrlEntry = Entry(root, textvariable=supabaseUrlVar, font=("Arial", 9), show="")
+Label(_inner, text="Supabase connection string (paste from dashboard):").pack(pady=(8, 0))
+supabaseUrlEntry = Entry(_inner, textvariable=supabaseUrlVar, font=("Arial", 9), show="")
 supabaseUrlEntry.pack(fill="x", padx=20)
 
 Checkbutton(
-    root,
+    _inner,
     text="Push rows to Supabase after scan" + ("" if PSYCOPG2_AVAILABLE else " (requires: pip install psycopg2-binary)"),
     variable=pushToSupabaseVar,
     fg="darkblue",
     state=NORMAL if PSYCOPG2_AVAILABLE else DISABLED,
 ).pack(pady=2)
 
-Button(root,text="Start Processing",command=root.destroy,bg="lightblue").pack(pady=20)
+Button(_inner,text="Start Processing",command=root.destroy,bg="lightblue").pack(pady=20)
 
 root.mainloop()
 
