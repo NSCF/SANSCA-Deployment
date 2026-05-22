@@ -460,17 +460,14 @@ except Exception as e:
     canvas.create_rectangle(0, 0, 300, 150, fill="lightgray")
     canvas.create_text(150, 75, text="[LOGO]", font=("Arial", 20, "bold"), fill="gray")
 
-Label(root, text="Select Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
+Label(root, text="Root Folder", font=("Arial", 12, "bold")).pack(pady=10)
 
-def selectRootFolder():
+def _apply_root_folder(p):
+    """Update UI state after a root folder has been chosen or created."""
     global EXIFTOOL_PATH, EXIFTOOL_AVAILABLE
-    p = filedialog.askdirectory()
-    if not p:
-        return
     rootFolderVar.set(p)
     rootLabel.config(text=p)
 
-    # Auto-load Supabase connection string if present
     supabase_url_file = pathlib.Path(p) / "DAMSG_auth" / "supabase_url.txt"
     if supabase_url_file.is_file():
         saved = supabase_url_file.read_text(encoding="utf-8").strip()
@@ -494,6 +491,58 @@ def selectRootFolder():
             text=f"exiftool not found — place {exe_name} in: {exiftool_exe.parent}",
             fg="red"
         )
+
+def selectRootFolder():
+    p = filedialog.askdirectory(title="Select SANSCA Root Folder")
+    if not p:
+        return
+    _apply_root_folder(p)
+
+def deployFolderStructure():
+    """Create a fresh SANSCA folder structure in a user-chosen location."""
+    parent = filedialog.askdirectory(title="Choose where to create the SANSCA root folder")
+    if not parent:
+        return
+
+    new_root = os.path.join(parent, "SANSCA")
+
+    if os.path.exists(new_root):
+        if not messagebox.askyesno(
+            "Folder exists",
+            f"'{new_root}' already exists.\nAdd any missing subfolders to it?"
+        ):
+            return
+
+    for sf in ("DAMSG_output", "DAMSG_auth", "DAMSG_exif", "DAMSG_mapping"):
+        os.makedirs(os.path.join(new_root, sf), exist_ok=True)
+
+    categories = list(CATEGORY_TARGETS.keys())
+    folders_created = 0
+
+    if mappingDF is not None:
+        institutions = sorted(mappingDF["institutionCode"].dropna().unique())
+        for cat in categories:
+            for inst in institutions:
+                sub = mappingDF[mappingDF["institutionCode"] == inst]
+                for coll in sorted(sub["collectionCode"].dropna().unique()):
+                    path = os.path.join(new_root, cat, inst, coll)
+                    if not os.path.exists(path):
+                        os.makedirs(path, exist_ok=True)
+                        folders_created += 1
+        detail = f"{folders_created} collection folder(s) created across {len(categories)} categories."
+    else:
+        for cat in categories:
+            os.makedirs(os.path.join(new_root, cat), exist_ok=True)
+        detail = (
+            "Category folders created. Load Google Sheets first to also "
+            "scaffold institution and collection subfolders."
+        )
+
+    _apply_root_folder(new_root)
+    messagebox.showinfo(
+        "Folder structure deployed",
+        f"Root folder: {new_root}\n\n{detail}"
+    )
 
 def loadGoogleSheets():
     global mappingDF, atomMappingDF
@@ -571,7 +620,8 @@ scanModeVar.trace_add("write", updateScanModeUI)
 # ==================================================
 # UI layout
 # ==================================================
-Button(root,text="Select SANSCA Root Folder",command=selectRootFolder,bg="lightgreen").pack(fill="x", padx=20, pady=5)
+Button(root,text="Select Existing Root Folder",command=selectRootFolder,bg="lightgreen").pack(fill="x", padx=20, pady=(5,2))
+Button(root,text="Deploy New Folder Structure",command=deployFolderStructure,bg="lightyellow").pack(fill="x", padx=20, pady=(0,5))
 rootLabel=Label(root,text="",wraplength=800,anchor="w")
 rootLabel.pack()
 exiftoolStatusLabel=Label(root,text="exiftool status: select a root folder first",wraplength=800,anchor="w",fg="gray")
