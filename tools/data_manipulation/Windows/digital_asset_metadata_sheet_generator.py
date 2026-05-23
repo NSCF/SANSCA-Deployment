@@ -57,7 +57,7 @@ ATOM_COLUMNS = [
     "eventActors", "eventActorHistories", "culture",
 ]
 # Extended columns for output files — includes audit fields not part of AtoM import
-ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType", "hardDriveId", "submittedBy", "datasetID"]
+ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType", "hardDriveId", "submittedBy", "datasetID", "assetCategory"]
 
 # ==================================================
 # System files to ignore during scanning
@@ -1140,6 +1140,7 @@ for cat in categories:
                 # Build extentAndMedium summary from child items
                 parent_row["extentAndMedium"] = build_extent_summary(subset_rows)
                 parent_row["datasetID"]       = f"{inst}-{coll}"
+                parent_row["assetCategory"]   = cat
 
                 atom_rows.append(parent_row)
 
@@ -1170,6 +1171,7 @@ for cat in categories:
                     item_row["hardDriveId"]         = item.get("hardDriveId", "")
                     item_row["submittedBy"]         = operator
                     item_row["datasetID"]           = f"{inst}-{coll}"
+                    item_row["assetCategory"]       = item.get("assetCategory", "")
                     atom_rows.append(item_row)
 
                 # Write AtoM per-collection metadata CSV now that rows are generated
