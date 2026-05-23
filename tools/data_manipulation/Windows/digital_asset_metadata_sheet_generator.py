@@ -57,7 +57,7 @@ ATOM_COLUMNS = [
     "eventActors", "eventActorHistories", "culture",
 ]
 # Extended columns for output files — includes audit fields not part of AtoM import
-ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType", "hardDriveId", "submittedBy", "datasetID", "assetCategory"]
+ATOM_OUTPUT_COLUMNS = ATOM_COLUMNS + ["checksumSHA256", "scanType", "hardDriveId", "submittedBy", "datasetID", "assetCategory", "format"]
 
 # ==================================================
 # System files to ignore during scanning
@@ -1166,6 +1166,7 @@ for cat in categories:
                     item_row["publicationStatus"]   = atom_meta.get("publicationStatus", "")
                     item_row["culture"]             = atom_meta.get("culture", "")
                     item_row["extentAndMedium"]     = f"1 {item.get('format', '').split('/')[-1].upper()} file"
+                    item_row["format"]              = item.get("format", "")
                     item_row["checksumSHA256"]      = item.get("checksumSHA256", "")
                     item_row["scanType"]            = item.get("scanType", "")
                     item_row["hardDriveId"]         = item.get("hardDriveId", "")
